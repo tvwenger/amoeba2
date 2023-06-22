@@ -3,7 +3,7 @@ Automated Molecular Excitation Bayesian line-fitting Algorithm
 
 `amoeba2` is based on [AMOEBA](https://github.com/AnitaPetzler/AMOEBA) and [Petzler et al. (2021)](https://iopscience.iop.org/article/10.3847/1538-4357/ac2f42).
 
-Given a set of optical depth spectra associated with the 1620, 1665, 1667, and 1720 MHz
+Given a set of optical depth spectra associated with the 1612, 1665, 1667, and 1720 MHz
 transitions of OH, `amoeba2` uses a Monte Carlo Markov Chain analysis to infer the
 optimal number of Gaussian components and their parameters. Here is a basic outline
 of the algorithm:
@@ -69,9 +69,9 @@ import numpy as np
 from amoeba2.simulate import simulate_tau_spectra
 
 # Define velocity axes for each transition.
-# In general, the order of things is 1620, 1665, 1667, and 1720 MHz
+# In general, the order of things is 1612, 1665, 1667, and 1720 MHz
 velocity_axes = [
-    np.arange(-15.0, 15.1, 0.15), # 1620 MHz
+    np.arange(-15.0, 15.1, 0.15), # 1612 MHz
     np.arange(-12.0, 12.1, 0.12), # 1665 MHz
     np.arange(-12.0, 12.1, 0.12), # 1667 MHz
     np.arange(-10.0, 10.1, 0.10), # 1720 MHz
