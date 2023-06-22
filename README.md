@@ -1,6 +1,8 @@
 # amoeba2
 Automated Molecular Excitation Bayesian line-fitting Algorithm
 
+`amoeba2` is based on [AMOEBA](https://github.com/AnitaPetzler/AMOEBA) and [Petzler et al. (2021)](https://iopscience.iop.org/article/10.3847/1538-4357/ac2f42).
+
 Given a set of optical depth spectra associated with the 1620, 1665, 1667, and 1720 MHz
 transitions of OH, `amoeba2` uses a Monte Carlo Markov Chain analysis to infer the
 optimal number of Gaussian components and their parameters. Here is a basic outline
