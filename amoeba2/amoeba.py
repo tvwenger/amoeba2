@@ -164,6 +164,9 @@ class Amoeba:
                 "You must first add the priors and likelihood to the models"
             )
 
+        # reset best model
+        self.best_model = None
+
         minimum_bic = self.models[self.n_gauss[0]].null_bic
         last_bic = minimum_bic
         print(f"Null hypothesis BIC = {minimum_bic}")
@@ -266,6 +269,9 @@ class Amoeba:
                 "You must first add the priors and likelihood to the models"
             )
 
+        # reset best model
+        self.best_model = None
+
         minimum_bic = self.models[self.n_gauss[0]].null_bic()
         last_bic = minimum_bic
         print(f"Null hypothesis BIC = {minimum_bic}")
@@ -275,6 +281,10 @@ class Amoeba:
         n_gauss = 1
         fit_n_gauss = {n: False for n in self.n_gauss}
         while True:
+            current_best = "0" if self.best_model is None else self.best_model.n_gauss
+            if self.verbose:
+                print(f"Current best model: n_gauss = {current_best}")
+
             print(f"Fitting n_gauss = {n_gauss}")
             self.models[n_gauss].fit(
                 draws,
@@ -311,9 +321,11 @@ class Amoeba:
                 self.models[n_gauss].cluster_converged()
                 and self.models[n_gauss].chains_converged()
             ):
-                if self.verbose:
-                    print("Model converged. Stopping.")
-                break
+                if num_increase < 2:
+                    if self.verbose:
+                        print("Model converged, but BIC might decrease. Continuing.")
+                else:
+                    print("Model converged and BIC increasing. Stopping.")
 
             if num_increase > 1:
                 if self.verbose:
