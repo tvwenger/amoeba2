@@ -176,11 +176,15 @@ class _AmoebaBaseModel:
         )
         return self._chains_converged
 
-    def has_divergences(self):
+    def has_divergences(self, threshold=10):
         """
-        Check if there are any divergences in the good chains.
+        Check if the number of divergences in the good chains exceeds
+        the threshold.
 
-        Inputs: None
+        Inputs:
+            threshold :: integer
+                Number of divergences to indicate a problem
+
         Returns: divergences
             divergences :: boolean
                 True if the model has any divergences
@@ -191,7 +195,7 @@ class _AmoebaBaseModel:
 
         self._has_divergences = (
             self.trace.sample_stats.diverging.sel(chain=self.good_chains()).data.sum()
-            > 0
+            > threshold
         )
         return self._has_divergences
 
