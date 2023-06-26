@@ -339,13 +339,23 @@ class Amoeba:
             if new_n_gauss == -1:
                 new_n_gauss = n_gauss + 1
 
-            # check if we've already fit this one
-            elif fit_n_gauss[new_n_gauss]:
-                new_n_gauss = n_gauss + 1
-
             # check if we're over the limit
+            if new_n_gauss > self.max_n_gauss:
+                # check if we have fewer n_gauss we can still try
+                for new_n_gauss in fit_n_gauss.keys():
+                    if not fit_n_gauss[new_n_gauss]:
+                        break
+                else:
+                    print("Exceeded max n_gauss. Stopping.")
+                    break
+
+            # check if we've already fit this one
+            while fit_n_gauss[new_n_gauss]:
+                new_n_gauss += 1
+            # now check that we're not over
             if new_n_gauss > self.max_n_gauss:
                 print("Exceeded max n_gauss. Stopping.")
                 break
+
             n_gauss = new_n_gauss
             print()
