@@ -350,8 +350,9 @@ class Amoeba:
                     break
 
             # check if we've already fit this one
-            while fit_n_gauss[new_n_gauss]:
+            while new_n_gauss in fit_n_gauss.keys() and fit_n_gauss[new_n_gauss]:
                 new_n_gauss += 1
+
             # now check that we're not over
             if new_n_gauss > self.max_n_gauss:
                 print("Exceeded max n_gauss. Stopping.")
