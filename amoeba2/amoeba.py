@@ -167,7 +167,7 @@ class Amoeba:
         # reset best model
         self.best_model = None
 
-        minimum_bic = self.models[self.n_gauss[0]].null_bic
+        minimum_bic = self.models[self.n_gauss[0]].null_bic()
         last_bic = minimum_bic
         print(f"Null hypothesis BIC = {minimum_bic}")
         print()
@@ -210,9 +210,12 @@ class Amoeba:
                 self.models[n_gauss].cluster_converged()
                 and self.models[n_gauss].chains_converged()
             ):
-                if self.verbose:
-                    print("Model converged. Stopping.")
-                break
+                if num_increase < 2:
+                    if self.verbose:
+                        print("Model converged, but BIC might decrease. Continuing.")
+                else:
+                    print("Model converged and BIC increasing. Stopping.")
+                    break
 
             if num_increase > 1:
                 if self.verbose:
@@ -326,6 +329,7 @@ class Amoeba:
                         print("Model converged, but BIC might decrease. Continuing.")
                 else:
                     print("Model converged and BIC increasing. Stopping.")
+                    break
 
             if num_increase > 1:
                 if self.verbose:
