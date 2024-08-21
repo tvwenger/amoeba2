@@ -74,7 +74,7 @@ class TauModel(BaseModel):
     def add_priors(
         self,
         prior_log10_N_0: Iterable[float] = [13.0, 1.0],
-        prior_inv_Tex: Iterable[float] = [0.0, 1.0],
+        prior_inv_Tex: Iterable[float] = [0.1, 1.0],
         prior_fwhm: float = 1.0,
         prior_velocity: Iterable[float] = [0.0, 10.0],
         prior_rms_tau: float = 0.1,
@@ -210,7 +210,7 @@ class TauModel(BaseModel):
             )
 
             # Optical depth spectrum (shape: spectral, cloud)
-            if "component" in ["1612", "1665"]:
+            if label in ["1612", "1665"]:
                 N_u = 10.0 ** self.model["log10_N"][2]
             else:
                 N_u = 10.0 ** self.model["log10_N"][3]

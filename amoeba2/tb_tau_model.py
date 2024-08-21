@@ -95,7 +95,7 @@ class TBTauModel(TauModel):
             )
 
             # Optical depth spectrum (shape: spectral, cloud)
-            if "component" in ["1612", "1665"]:
+            if label in ["1612", "1665"]:
                 N_u = 10.0 ** self.model["log10_N"][2]
             else:
                 N_u = 10.0 ** self.model["log10_N"][3]

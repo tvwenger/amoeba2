@@ -52,7 +52,7 @@ The transition optical depth is taken from [Magnum & Shirley (2015) equation 29]
 
 The radiative transfer is calculated explicitly assuming an off-source background temperature `bg_temp` (see below) similar to [Magnum & Shirley (2015) equation 23](https://ui.adsabs.harvard.edu/abs/2015PASP..127..266M/abstract). By default, the clouds are ordered from *nearest* to *farthest*, so optical depth effects (i.e., self-absorption) may be present.
 
-Notably, since these are *forward models*, we do not make assumptions regarding the optical depth or the Rayleigh-Jeans limit. These effects are *predicted* by the model. There is one exception: the `ordered` argument, [described](#ordered).
+Notably, since these are *forward models*, we do not make assumptions regarding the optical depth or the Rayleigh-Jeans limit. These effects are *predicted* by the model. There is one exception: the `ordered` argument, [described below](#ordered).
 
 # Models
 
@@ -67,7 +67,7 @@ The models provided by `amoeba2` are implemented in the [`bayes_spec`](https://g
 | Cloud Parameter<br>`variable` | Parameter                                | Units    | Prior, where<br>($p_0, p_1, \dots$) = `prior_{variable}`     | Default<br>`prior_{variable}` |
 | :---------------------------- | :--------------------------------------- | :------- | :----------------------------------------------------------- | :---------------------------- |
 | `log10_N_0`                   | log10 lowest energy state column density | `cm-2`   | $\log_{10}N_0 \sim {\rm Normal}(\mu=p_0, \sigma=p_1)$        | `[13.0, 1.0]`                 |
-| `inv_Tex`                     | Inverse excitation temperature           | `K-1`    | $T_{\rm ex}^{-1} \sim {\rm Normal}(\mu=p_0, \sigma=p_1)$     | `[0.0, 1.0]`                  |
+| `inv_Tex`                     | Inverse excitation temperature           | `K-1`    | $T_{\rm ex}^{-1} \sim {\rm Normal}(\mu=p_0, \sigma=p_1)$     | `[0.1, 1.0]`                  |
 | `fwhm`                        | FWHM line width                          | `km s-1` | $\Delta V_{\rm H} \sim {\rm Gamma}(\alpha=2.0, \beta=1.0/p)$ | `1.0`                         |  |
 | `velocity`                    | Velocity                                 | `km s-1` | $V \sim {\rm Normal}(\mu=p_0, \sigma=p_1)$                   | `[0.0, 10.0]`                 |
 

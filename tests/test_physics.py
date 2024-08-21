@@ -27,7 +27,7 @@ from amoeba2 import physics
 
 
 def test_boltzmann():
-    boltzmann = physics.calc_boltzmann(2, 1, 1800.0, 1.0)
+    boltzmann = physics.calc_boltzmann(2, 1, 1800.0, 1.0).eval()
     assert not np.isnan(boltzmann)
 
 
@@ -37,9 +37,7 @@ def test_calc_line_ratio():
     fwhm = np.array([1.0, 2.0])
     line_profile = physics.calc_line_profile(velo_axis, velocity, fwhm).eval()
     assert line_profile.shape == (1001, 2)
-    assert_allclose(
-        line_profile.sum(axis=0) * (velo_axis[1] - velo_axis[0]), np.ones(2)
-    )
+    assert_allclose(line_profile.sum(axis=0) * (velo_axis[1] - velo_axis[0]), np.ones(2))
     exp_line_profile = np.array(
         [
             np.sqrt(4.0 * np.log(2.0) / np.pi),
@@ -58,19 +56,14 @@ def test_calc_optical_depth():
     line_profile = physics.calc_line_profile(velo_axis, velocity, fwhm).eval()
     freq = 1800.0
     Aul = 1.0e-13
-    optical_depth = physics.calc_optical_depth(
-        N_u, inv_Tex, line_profile, freq, Aul
-    ).eval()
+    optical_depth = physics.calc_optical_depth(N_u, inv_Tex, line_profile, freq, Aul).eval()
     assert optical_depth.shape == (1001, 2)
     assert np.all(optical_depth[:, 0] > 0)
     assert np.all(optical_depth[:, 1] < 0)
 
 
 def test_rj_temperature():
-    assert (
-        physics.rj_temperature(1800.0, -10.0).eval()
-        < physics.rj_temperature(1800.0, 10.0).eval()
-    )
+    assert physics.rj_temperature(1800.0, -10.0).eval() < physics.rj_temperature(1800.0, 10.0).eval()
 
 
 def test_radiative_transfer():
@@ -82,9 +75,7 @@ def test_radiative_transfer():
     line_profile = physics.calc_line_profile(velo_axis, velocity, fwhm).eval()
     freq = 1800.0
     Aul = 1.0e-13
-    optical_depth = physics.calc_optical_depth(
-        N_u, inv_Tex, line_profile, freq, Aul
-    ).eval()
+    optical_depth = physics.calc_optical_depth(N_u, inv_Tex, line_profile, freq, Aul).eval()
     bg_temp = 2.7
     tb = physics.radiative_transfer(freq, optical_depth, inv_Tex, bg_temp).eval()
     assert tb.shape == (1001,)
