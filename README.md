@@ -1,286 +1,101 @@
-# amoeba2
-Automated Molecular Excitation Bayesian line-fitting Algorithm
+# bayes_yplus <!-- omit in toc -->
+A Bayesian Model of Radio Recombination Line Emission
 
-`amoeba2` is based on [AMOEBA](https://github.com/AnitaPetzler/AMOEBA) and [Petzler et al. (2021)](https://iopscience.iop.org/article/10.3847/1538-4357/ac2f42).
+`bayes_yplus` implements models to infer the helium abundance (`y+`) from radio recombination line (RRL) observations.
 
-Given a set of optical depth spectra associated with the 1612, 1665, 1667, and 1720 MHz
-transitions of OH, `amoeba2` uses a Monte Carlo Markov Chain analysis to infer the
-optimal number of Gaussian components and their parameters. Here is a basic outline
-of the algorithm:
+- [Installation](#installation)
+  - [Basic Installation](#basic-installation)
+  - [Development Installation](#development-installation)
+- [Notes on Physics \& Radiative Transfer](#notes-on-physics--radiative-transfer)
+- [Models](#models)
+  - [`YPlusModel`](#yplusmodel)
+  - [`ordered_velocity`](#ordered_velocity)
+- [Syntax \& Examples](#syntax--examples)
+- [Issues and Contributing](#issues-and-contributing)
+- [License and Copyright](#license-and-copyright)
 
-0. First, `amoeba2` calculates the Bayesian Information Criterion (BIC) over the
-data for the null hypothesis.
 
-1. Starting with one component, `amoeba2` will sample the posterior distribution
-using MCMC with at least 4 independent chains.
+# Installation
 
-2. Because of the degeneracies related to fitting Gaussians (even constrained Gaussians!)
-to data, it is possible that chains get stuck in a local maximum of the posterior distribution.
-This is especially likely when the number of components is less than the "true" number of
-components, in which case each chain may decide to fit a different subset of the components.
-`amoeba2` checks if the chains appear converged by evaluating the BIC
-over the data using the mean point estimate per chain. Any deviant chains are discarded.
+## Basic Installation
 
-3. There also exists a labeling degeneracy: each chain could decide to fit the components
-in a different order. To break the degeneracy, `amoeba2` uses a Gaussian Mixture Model (GMM)
-to cluster the posterior samples of all chains into the same number of groups as there are
-expected components. It also tests fewer and more clusters and evaluates the BIC for each
-number of clusters in order to determine how many clusters appears optimal to explain the
-posterior samples.
-
-4. Once completed, `amoeba2` checks to see if the chains appear converged (by comparing 
-the BIC of each chain's mean point estimate to that of the combined posterior samples) and
-if the number of components seems converged (by comparing the ideal GMM cluster count to
-the model number of components). If both convergence checks are passed, then `amoeba2` will
-stop.
-
-5. `amoeba2` also checks to see if there were any divergences in the posterior sampling.
-Divergences in `amoeba2` indicate that the model number of components exceeds the true
-number of components present in the data. If there are divergences, then `amoeba2` will
-stop.
-
-6. If the BIC of the mean point estimate has decreased compared to the previous iteration,
-then `amoeba2` will fit another model with a different number of model components. The
-strategy is either to increment the number of components by one (see `fit_all()` below)
-or to try the number of components predicted by the GMM (see `fit_best()` below).
-
-7. If the BIC of the mean point estimate increases two iterations in a row, then `amoeba2`
-will stop.
-
-## Installation
-```bash
-conda create --name amoeba2 -c conda-forge pymc
-conda activate amoeba2
-pip install git+https://github.com/tvwenger/amoeba2.git
+Install with pip:
+```
+pip install bayes_oh
 ```
 
-## Usage
-In general, try `help(function)` for a thorough explanation
-of the parameters, return values, and other information related to
-`function` (e.g., `help(simulate_tau_spectra`).
+## Development Installation
 
-### Synthetic Observations
+Alternatively, download and unpack the [latest release](https://github.com/tvwenger/bayes_oh/releases/latest), or [fork the repository](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/working-with-forks/fork-a-repo) and contribute to the development of `bayes_oh`!
 
-The program `simulate.py` can be used to generate simulated data for
-testing.
-
-```python
-import numpy as np
-from amoeba2.simulate import simulate_tau_spectra
-
-# Define velocity axes for each transition.
-# In general, the order of things is 1612, 1665, 1667, and 1720 MHz
-velocity_axes = [
-    np.arange(-15.0, 15.1, 0.15), # 1612 MHz
-    np.arange(-12.0, 12.1, 0.12), # 1665 MHz
-    np.arange(-12.0, 12.1, 0.12), # 1667 MHz
-    np.arange(-10.0, 10.1, 0.10), # 1720 MHz
-]
-
-# Define the "truths" for four spectral line components
-truths = {
-    "center": np.array([-1.5, -0.75, 0.15, 0.55]), # centroids
-    "log10_fwhm": np.array(
-        [np.log10(0.75), np.log10(1.0), np.log10(0.5), np.log10(0.75)]
-    ), # log10 full-width at half-maximum line widths
-    "peak_tau_1612": np.array([0.005, 0.025, -0.03, 0.015]), # peak optical depths
-    "peak_tau_1665": np.array([0.02, -0.01, -0.002, 0.0]),
-    "peak_tau_1667": np.array([-0.01, 0.015, -0.025, -0.025]),
-}
-
-# Set the optical depth rms in each transition
-tau_rms = np.array([0.001, 0.0012, 0.0014, 0.0016])
-
-# Evaluate simulated optical depth spectra
-tau_spectra, truths = simulate_tau_spectra(
-    velocity_axes,
-    tau_rms,
-    truths,
-    seed=5391,
-)
-# truths now contains peak_tau_1720, which has been set by the
-# optical depth sum rule.
+Install in a `conda` virtual environment:
+```
+cd /path/to/bayes_oh
+conda env create -f environment.yml
+conda activate bayes_oh-dev
+pip install -e .
 ```
 
-### Initializing the data structure
+# Notes on Physics & Radiative Transfer
 
-The data (either real or simulated) must be contained within a special
-`amoeba2` data structure
+All models in `bayes_yplus` assume the emission is optically thin. The helium RRL is assumed to have a fixed centroid velocity -122.15 km/s from that of the hydrogen RRL.
 
-```python
-from amoeba2.data import AmoebaData
+# Models
 
-# Initialize the data structure
-data = AmoebaData()
+The models provided by `bayes_yplus` are implemented in the [`bayes_spec`](https://github.com/tvwenger/bayes_spec) framework. `bayes_spec` assumes that the source of spectral line emission can be decomposed into a series of "clouds", each of which is defined by a set of model parameters. Here we define the models available in `bayes_yplus`.
 
-# Add the data to the structure
-for i, transition in enumerate(["1612", "1665", "1667", "1720"]):
-    data.set_spectrum(
-        transition,
-        velocity_axes[i],
-        tau_spectra[i],
-        tau_rms[i],
-    )
-```
+## `YPlusModel`
 
-### Single model demonstration
+The basic model is `YPlusModel`. The model assumes that the emission can be explained by hydrogen and helium RRL emission from discrete clouds. The following diagram demonstrates the relationship between the free parameters (empty ellipses), deterministic quantities (rectangles), model predictions (filled ellipses), and observations (filled, round rectangles). Many of the parameters are internally normalized (and thus have names like `_norm`). The subsequent tables describe the model parameters in more detail.
 
-If the number of spectral components is known a priori, then a model may be fit.
+![hfs model graph](examples/figures/model.gv.png)
 
-```python
-from amoeba2.model import AmoebaTauModel
+| Cloud Parameter<br>`variable` | Parameter                  | Units       | Prior, where<br>($p_0, p_1, \dots$) = `prior_{variable}`                  | Default<br>`prior_{variable}` |
+| :---------------------------- | :------------------------- | :---------- | :------------------------------------------------------------------------ | :---------------------------- |
+| `H_area`                      | H RRL line area            | `mK km s-1` | $\int T_{B, \rm H} dV \sim {\rm Gamma}(\alpha=2.0, \beta=1.0/p)$          | `1000.0`                      |
+| `H_center`                    | H RRL center velocity      | `km s-1`    | $V_{\rm LSR, H} \sim {\rm Normal}(\mu=p_0, \sigma=p_1)$                   | `[0.0, 25.0]`                 |
+| `H_fwhm`                      | H RRL FWHM line width      | `km s-1`    | $\Delta V_{\rm H} \sim {\rm Gamma}(\alpha=3.0, \beta=2.0/p)$              | `20.0`                        |  |
+| `He_H_fwhm_ratio`             | He/H FWHM line width ratio | ``          | $\Delta V_{\rm He}/\Delta V_{\rm H} \sim {\rm Normal}(\mu=1.0, \sigma=p)$ | `0.1`                         |
+| `yplus`                       | He abundance by number     | ``          | $y^+ \sim {\rm Gamma}(\alpha=3.0, \beta=2.0/p)$                           | `0.1`                         |
 
-# Initialize the model
-model = AmoebaTauModel(
-    n_gauss=4, # number of components
-    seed=1234, # random number generator seed
-    verbose=True
-)
+| Hyper Parameter<br>`variable` | Parameter          | Units | Prior, where<br>($p_0, p_1, \dots$) = `prior_{variable}` | Default<br>`prior_{variable}` |
+| :---------------------------- | :----------------- | :---- | :------------------------------------------------------- | :---------------------------- |
+| `rms`                         | Spectral rms noise | `mK`  | ${\rm rms} \sim {\rm HalfNormal}(\sigma=p)$              | `0.01`                        |
 
-# Set the prior distributions
-# Normal distribution with mean = 0 and sigma = 1.0
-model.set_prior("center", "normal", np.array([0.0, 1.0]))
+## `ordered_velocity`
 
-# Normal distribution with mean = 0 and sigma = 0.25
-model.set_prior("log10_fwhm", "normal", np.array([0.0, 0.25]))
+An additional parameter to `set_priors` for these models is `ordered_velocity`. By default, this parameter is `False`, in which case the order of the clouds is from nearest to farthest. Sampling from these models can be challenging due to the labeling degeneracy: if the order of clouds does not matter (i.e., the emission is optically thin), then each Markov chain could decide on a different, equally-valid order of clouds.
 
-# Normal distribution with mean = 0 and sigma = 0.25
-model.set_prior("peak_tau", "normal", np.array([0.0, 0.01]))
+If we assume that the emission is optically thin, then we can set `ordered_velocity=True`, in which case the order of clouds is restricted to be increasing with velocity. This assumption can *drastically* improve sampling efficiency. When `ordered_velocity=True`, the `velocity` prior is defined differently:
 
-# Add a Normal likelihood distribution
-model.add_likelihood("normal")
+| Cloud Parameter<br>`variable` | Parameter             | Units    | Prior, where<br>($p_0, p_1, \dots$) = `prior_{variable}`                 | Default<br>`prior_{variable}` |
+| :---------------------------- | :-------------------- | :------- | :----------------------------------------------------------------------- | :---------------------------- |
+| `H_center`                    | H RRL center velocity | `km s-1` | $V_i \sim p_0 + \sum_0^{i-1} V_i + {\rm Gamma}(\alpha=2, \beta=1.0/p_1)$ | `[0.0, 25.0]`                 |
 
-# Add the data
-model.set_data(data)
-# N.B. you can update the data using this function instead of re-specifying
-# the entire model (e.g., if your priors aren't changing between successive
-# runs of amoeba2)
+# Syntax & Examples
 
-# Generate prior predictive samples to test the prior distribution validity
-prior_predictive = model.prior_predictive_check(
-    samples=50, plot_fname="prior_predictive.png"
-)
+See the various notebooks under [examples](https://github.com/tvwenger/bayes_yplus/tree/main/examples) for demonstrations of these models.
 
-# Sample the posterior distribution with 8 chains and 8 CPUs
-# using 1000 tuning iterations and then drawing 1000 samples
-model.fit(tune=1000, draws=1000, chains=8, cores=8)
-
-# Plot the posterior sample chains
-model.plot_traces("traces.png")
-
-# Generate posterior predictive samples to check posterior inference
-# thin = keep only every 50th posterior sample
-posterior_predictive = model.posterior_predictive_check(
-    thin=50, plot_fname="posterior_predictive.png"
-)
-
-# Plot the marginalized posterior samples. One plot is created
-# per component (named corner_0.png, corner_1.png, etc. in this example)
-# and one plot is created for the component-combined posterior
-# (named corner.png in this example). For simulated data, you can
-# supply the truths dictionary to overplot the "true" values
-model.plot_corner("corner.png", truths=truths)
-
-# Get the posterior point estimate mean, standard deviation,
-# and 68% highest density interval
-summary = model.point_estimate(stats=["mean", "std", "hdi"], hdi_prob=0.68)
-print(summary['center'])
-```
-
-### Determining the optimal number of components
-
-The `Amoeba` class is essentially a wrapper of many models, each with a different
-number of components. The same prior and likelihood distributions are assigned
-to each model. The initialization will look familiar:
-
-```python
-from amoeba2.amoeba import Amoeba
-
-# Initialize amoeba2
-amoeba = Amoeba(max_n_gauss=10, verbose=True, seed=1234)
-
-# Add priors
-amoeba.set_prior("center", "normal", np.array([0.0, 1.0]))
-amoeba.set_prior("log10_fwhm", "normal", np.array([0.0, 0.25]))
-amoeba.set_prior("peak_tau", "normal", np.array([0.0, 0.01]))
-
-# Add likelihood
-amoeba.add_likelihood("normal")
-
-# Add data
-amoeba.set_data(data)
-
-# models for each number of components are stored in this dictionary,
-# which is indexed by the number of components
-print(amoeba.models)
-# So you could interact with individual models via
-# amoeba.models[1].fit()
-```
-
-At this point there are two strategies for identifying the optimal number of components.
-Both will stop when the chain and component convergence checks pass, or when there
-are sampling divergences, or when the number of components exceeds `max_n_gauss` above,
-or when the BIC of the mean point estimate of the posterior samples increases twice in
-a row.
-
-Otherwise, the difference is how `amoeba2` decides how many components to try in
-successive iterations. 
-
-```python
-# fit_all() will start with 1 component and increment by one each time
-# amoeba.fit_all(tune=1000, draws=1000, chains=8, cores=8)
-
-# fit_best() will start with 1 component, and at each iteration it will try
-# n_gauss set by the GMM prediction for the optimal number of components.
-amoeba.fit_best(tune=1000, draws=1000, chains=8, cores=8)
-```
-
-The "best" model -- the first one to pass the convergence checks, or otherwise the
-one with the lowest BIC, is saved in `amoeba.best_model`.
-
-```python
-print(amoeba.best_model.n_gauss)
-# 4
-
-posterior_predictive = amoeba.best_model.posterior_predictive_check(
-    thin=50, plot_fname="posterior_predictive.png"
-)
-amoeba.best_model.plot_corner("corner.png", truths=truths)
-```
-
-![Posterior Predictive](https://raw.githubusercontent.com/tvwenger/amoeba2/main/example/posterior_predictive.png)
-
-![Corner Plot](https://raw.githubusercontent.com/tvwenger/amoeba2/main/example/corner.png)
-
-## Known Issues
-
-1. `amoeba2` currently only implements fitting optical depth spectra, and not the
-more general case of optical depth and brightness temperature spectra as in the
-original `amoeba`.
-
-## Issues and Contributing
+# Issues and Contributing
 
 Anyone is welcome to submit issues or contribute to the development
-of this software via [Github](https://github.com/tvwenger/amoeba2).
+of this software via [Github](https://github.com/tvwenger/bayes_yplus).
 
-## License and Copyright
+# License and Copyright
 
-Copyright (c) 2023 Trey Wenger
+Copyright (c) 2024 Trey Wenger
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+GNU General Public License v3 (GNU GPLv3)
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published
+by the Free Software Foundation, either version 3 of the License,
+or (at your option) any later version.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
