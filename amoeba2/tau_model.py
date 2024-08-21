@@ -36,11 +36,7 @@ class TauModel(BaseModel):
     """Definition of the TauModel. SpecData keys must be "tau_1612", "tau_1665", "tau_1667", and "tau_1720"."""
 
     def __init__(self, *args, **kwargs):
-        """Initialize a new TauModel instance
-
-        :param `*args`: Arguments passed to :class:`BaseModel`
-        :param `**kwargs`: Keyword arguments passed to :class:`BaseModel`
-        """
+        """Initialize a new TauModel instance."""
         # Initialize BaseModel
         super().__init__(*args, **kwargs)
 
@@ -51,14 +47,14 @@ class TauModel(BaseModel):
         self.model.add_coords(
             {
                 "state": [0, 1, 2, 3],
-                "component_free_Tex": ["1612", "1665", "1667"],
+                "component_Tex_free": ["1612", "1665", "1667"],
                 "component": ["1612", "1665", "1667", "1720"],
             }
         )
 
         # Select features used for posterior clustering
         self._cluster_features += [
-            "log10_N_0_norm",
+            "log10_N_0",
             "velocity",
             "fwhm",
         ]
@@ -118,16 +114,18 @@ class TauModel(BaseModel):
 
         with self.model:
             # lowest energy state column density (cm-2; shape: clouds)
-            log10_N_0_norm = pm.Normal(
-                "log10_N_0_norm", mu=0.0, sigma=1.0, dims="cloud"
+            log10_N_0_norm = pm.Normal("log10_N_0_norm", mu=0.0, sigma=1.0, dims="cloud")
+            log10_N_0 = pm.Deterministic(
+                "log10_N_0", prior_log10_N_0[0] + prior_log10_N_0[1] * log10_N_0_norm, dims="cloud"
             )
-            log10_N_0 = prior_log10_N_0[0] + prior_log10_N_0[1] * log10_N_0_norm
 
             # inverse excitation temperature (K-1; shape: components, clouds)
-            inv_Tex_norm = pm.Normal(
-                "inv_Tex_norm", mu=0.0, sigma=1.0, dims=["component_free_Tex", "cloud"]
+            inv_Tex_free_norm = pm.Normal("inv_Tex_free_norm", mu=0.0, sigma=1.0, dims=["component_Tex_free", "cloud"])
+            inv_Tex_free = pm.Deterministic(
+                "inv_Tex_free",
+                prior_inv_Tex[0] + prior_inv_Tex[1] * inv_Tex_free_norm,
+                dims=["component_Tex_free", "cloud"],
             )
-            inv_Tex_free = prior_inv_Tex[0] + prior_inv_Tex[1] * inv_Tex_norm
 
             # excitation temperature sum rule
             inv_Tex_1720 = (
@@ -144,17 +142,11 @@ class TauModel(BaseModel):
 
             # Other state column densities (cm-2; shape: cloud)
             # 2 -> 0 == 1665
-            log10_N_2 = log10_N_0 + pt.log10(
-                physics.calc_boltzmann(3, 3, self.mol_data["freq"][1], inv_Tex[1])
-            )
+            log10_N_2 = log10_N_0 + pt.log10(physics.calc_boltzmann(3, 3, self.mol_data["freq"][1], inv_Tex[1]))
             # 2 -> 1 == 1612
-            log10_N_1 = log10_N_2 - pt.log10(
-                physics.calc_boltzmann(3, 5, self.mol_data["freq"][0], inv_Tex[0])
-            )
+            log10_N_1 = log10_N_2 - pt.log10(physics.calc_boltzmann(3, 5, self.mol_data["freq"][0], inv_Tex[0]))
             # 3 -> 1 == 1667
-            log10_N_3 = log10_N_1 + pt.log10(
-                physics.calc_boltzmann(5, 5, self.mol_data["freq"][2], inv_Tex[2])
-            )
+            log10_N_3 = log10_N_1 + pt.log10(physics.calc_boltzmann(5, 5, self.mol_data["freq"][2], inv_Tex[2]))
             log10_N = pt.concatenate(
                 [log10_N_0[None], log10_N_1[None], log10_N_2[None], log10_N_3[None]],
                 axis=0,
@@ -175,9 +167,7 @@ class TauModel(BaseModel):
 
             # Center velocity (km s-1; shape: clouds)
             if ordered:
-                velocity_offset_norm = pm.Gamma(
-                    "velocity_norm", alpha=2.0, beta=1.0, dims="cloud"
-                )
+                velocity_offset_norm = pm.Gamma("velocity_norm", alpha=2.0, beta=1.0, dims="cloud")
                 velocity_offset = velocity_offset_norm * prior_velocity[1]
                 _ = pm.Deterministic(
                     "velocity",
@@ -200,9 +190,7 @@ class TauModel(BaseModel):
 
             # Optical depth rms
             rms_tau_norm = pm.HalfNormal("rms_tau_norm", sigma=1.0, dims="component")
-            _ = pm.Deterministic(
-                "rms_tau", rms_tau_norm * prior_rms_tau, dims="component"
-            )
+            _ = pm.Deterministic("rms_tau", rms_tau_norm * prior_rms_tau, dims="component")
 
     def predict_tau(self) -> dict:
         """Predict the optical depth spectra from the model parameters.
