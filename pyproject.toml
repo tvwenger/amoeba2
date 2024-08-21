@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools", "versioneer[toml]==0.29"]
+build-backend = "setuptools.build_meta"
+
+[tool.versioneer]
+VCS = "git"
+style = "pep440"
+versionfile_source = "amoeba2/_version.py"
+versionfile_build = "amoeba2/_version.py"
+tag_prefix = "v"
+
+[project]
+name = "amoeba2"
+description = "Automated Molecular Excitation Bayesian line-fitting Algorithm"
+authors = [
+  { name="Trey Wenger", email="tvwenger@gmail.com" },
+]
+readme = "README.md"
+license = { file="LICENSE" }
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Operating System :: OS Independent",
+]
+dynamic = ["version", "dependencies"]
+
+[project.urls]
+Homepage = "https://github.com/tvwenger/amoeba2"
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
+
+[tool.coverage.run]
+omit = [
+    "amoeba2/_version.py",
+]

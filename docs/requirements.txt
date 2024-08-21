@@ -1,0 +1,6 @@
+sphinx_rtd_theme
+nbsphinx
+numpydoc
+astropy
+astroquery
+bayes_spec>=1.6.2

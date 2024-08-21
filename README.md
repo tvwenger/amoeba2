@@ -1,286 +1,124 @@
-# amoeba2
+# amoeba2 <!-- omit in toc -->
+
+![publish](https://github.com/tvwenger/amoeba2/actions/workflows/publish.yml/badge.svg)
+![tests](https://github.com/tvwenger/amoeba2/actions/workflows/tests.yml/badge.svg)
+[![Documentation Status](https://readthedocs.org/projects/amoeba2/badge/?version=latest)](https://amoeba2.readthedocs.io/en/latest/?badge=latest)
+
 Automated Molecular Excitation Bayesian line-fitting Algorithm
 
-`amoeba2` is based on [AMOEBA](https://github.com/AnitaPetzler/AMOEBA) and [Petzler et al. (2021)](https://iopscience.iop.org/article/10.3847/1538-4357/ac2f42).
+`amoeba2` is a Bayesian model of the 1612, 1665, 1667, and 1720 MHz hyperfine transitions of OH written in the [`bayes_spec`](https://github.com/tvwenger/bayes_spec) spectral line modeling framework. `amoeba2` is inspired by [AMOEBA](https://github.com/AnitaPetzler/AMOEBA) and [Petzler et al. (2021)](https://iopscience.iop.org/article/10.3847/1538-4357/ac2f42).
 
-Given a set of optical depth spectra associated with the 1612, 1665, 1667, and 1720 MHz
-transitions of OH, `amoeba2` uses a Monte Carlo Markov Chain analysis to infer the
-optimal number of Gaussian components and their parameters. Here is a basic outline
-of the algorithm:
+Read below to get started, and check out the tutorials here: https://amoeba2.readthedocs.io
 
-0. First, `amoeba2` calculates the Bayesian Information Criterion (BIC) over the
-data for the null hypothesis.
+- [Installation](#installation)
+  - [Basic Installation](#basic-installation)
+  - [Development Installation](#development-installation)
+- [Notes on Physics \& Radiative Transfer](#notes-on-physics--radiative-transfer)
+- [Models](#models)
+  - [`TauModel`](#taumodel)
+  - [`TauTBModel`](#tautbmodel)
+  - [`ordered`](#ordered)
+- [Syntax \& Examples](#syntax--examples)
+- [Issues and Contributing](#issues-and-contributing)
+- [License and Copyright](#license-and-copyright)
 
-1. Starting with one component, `amoeba2` will sample the posterior distribution
-using MCMC with at least 4 independent chains.
 
-2. Because of the degeneracies related to fitting Gaussians (even constrained Gaussians!)
-to data, it is possible that chains get stuck in a local maximum of the posterior distribution.
-This is especially likely when the number of components is less than the "true" number of
-components, in which case each chain may decide to fit a different subset of the components.
-`amoeba2` checks if the chains appear converged by evaluating the BIC
-over the data using the mean point estimate per chain. Any deviant chains are discarded.
+# Installation
 
-3. There also exists a labeling degeneracy: each chain could decide to fit the components
-in a different order. To break the degeneracy, `amoeba2` uses a Gaussian Mixture Model (GMM)
-to cluster the posterior samples of all chains into the same number of groups as there are
-expected components. It also tests fewer and more clusters and evaluates the BIC for each
-number of clusters in order to determine how many clusters appears optimal to explain the
-posterior samples.
+## Basic Installation
 
-4. Once completed, `amoeba2` checks to see if the chains appear converged (by comparing 
-the BIC of each chain's mean point estimate to that of the combined posterior samples) and
-if the number of components seems converged (by comparing the ideal GMM cluster count to
-the model number of components). If both convergence checks are passed, then `amoeba2` will
-stop.
-
-5. `amoeba2` also checks to see if there were any divergences in the posterior sampling.
-Divergences in `amoeba2` indicate that the model number of components exceeds the true
-number of components present in the data. If there are divergences, then `amoeba2` will
-stop.
-
-6. If the BIC of the mean point estimate has decreased compared to the previous iteration,
-then `amoeba2` will fit another model with a different number of model components. The
-strategy is either to increment the number of components by one (see `fit_all()` below)
-or to try the number of components predicted by the GMM (see `fit_best()` below).
-
-7. If the BIC of the mean point estimate increases two iterations in a row, then `amoeba2`
-will stop.
-
-## Installation
-```bash
-conda create --name amoeba2 -c conda-forge pymc
-conda activate amoeba2
-pip install git+https://github.com/tvwenger/amoeba2.git
+Install with pip:
+```
+pip install amoeba2
 ```
 
-## Usage
-In general, try `help(function)` for a thorough explanation
-of the parameters, return values, and other information related to
-`function` (e.g., `help(simulate_tau_spectra`).
+## Development Installation
 
-### Synthetic Observations
+Alternatively, download and unpack the [latest release](https://github.com/tvwenger/amoeba2/releases/latest), or [fork the repository](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/working-with-forks/fork-a-repo) and contribute to the development of `amoeba2`!
 
-The program `simulate.py` can be used to generate simulated data for
-testing.
-
-```python
-import numpy as np
-from amoeba2.simulate import simulate_tau_spectra
-
-# Define velocity axes for each transition.
-# In general, the order of things is 1612, 1665, 1667, and 1720 MHz
-velocity_axes = [
-    np.arange(-15.0, 15.1, 0.15), # 1612 MHz
-    np.arange(-12.0, 12.1, 0.12), # 1665 MHz
-    np.arange(-12.0, 12.1, 0.12), # 1667 MHz
-    np.arange(-10.0, 10.1, 0.10), # 1720 MHz
-]
-
-# Define the "truths" for four spectral line components
-truths = {
-    "center": np.array([-1.5, -0.75, 0.15, 0.55]), # centroids
-    "log10_fwhm": np.array(
-        [np.log10(0.75), np.log10(1.0), np.log10(0.5), np.log10(0.75)]
-    ), # log10 full-width at half-maximum line widths
-    "peak_tau_1612": np.array([0.005, 0.025, -0.03, 0.015]), # peak optical depths
-    "peak_tau_1665": np.array([0.02, -0.01, -0.002, 0.0]),
-    "peak_tau_1667": np.array([-0.01, 0.015, -0.025, -0.025]),
-}
-
-# Set the optical depth rms in each transition
-tau_rms = np.array([0.001, 0.0012, 0.0014, 0.0016])
-
-# Evaluate simulated optical depth spectra
-tau_spectra, truths = simulate_tau_spectra(
-    velocity_axes,
-    tau_rms,
-    truths,
-    seed=5391,
-)
-# truths now contains peak_tau_1720, which has been set by the
-# optical depth sum rule.
+Install in a `conda` virtual environment:
+```
+cd /path/to/amoeba2
+conda env create -f environment.yml
+conda activate amoeba2-dev
+pip install -e .
 ```
 
-### Initializing the data structure
+# Notes on Physics & Radiative Transfer
 
-The data (either real or simulated) must be contained within a special
-`amoeba2` data structure
+All models in `amoeba2` apply the same physics and equations of radiative transfer. 
 
-```python
-from amoeba2.data import AmoebaData
+The transition optical depth is taken from [Magnum & Shirley (2015) equation 29](https://ui.adsabs.harvard.edu/abs/2015PASP..127..266M/abstract). The excitation temperature is allowed to vary between transitions (a non-LTE assumption) and clouds. The excitation temperatures of the 1612, 1665, and 1667 MHz transitions are free, whereas that of the 1720 MHz transition is derived from the excitation temperature sum rule.
 
-# Initialize the data structure
-data = AmoebaData()
+The radiative transfer is calculated explicitly assuming an off-source background temperature `bg_temp` (see below) similar to [Magnum & Shirley (2015) equation 23](https://ui.adsabs.harvard.edu/abs/2015PASP..127..266M/abstract). By default, the clouds are ordered from *nearest* to *farthest*, so optical depth effects (i.e., self-absorption) may be present.
 
-# Add the data to the structure
-for i, transition in enumerate(["1612", "1665", "1667", "1720"]):
-    data.set_spectrum(
-        transition,
-        velocity_axes[i],
-        tau_spectra[i],
-        tau_rms[i],
-    )
-```
+Notably, since these are *forward models*, we do not make assumptions regarding the optical depth or the Rayleigh-Jeans limit. These effects are *predicted* by the model. There is one exception: the `ordered` argument, [described below](#ordered).
 
-### Single model demonstration
+# Models
 
-If the number of spectral components is known a priori, then a model may be fit.
+The models provided by `amoeba2` are implemented in the [`bayes_spec`](https://github.com/tvwenger/bayes_spec) framework. `bayes_spec` assumes that the source of spectral line emission can be decomposed into a series of "clouds", each of which is defined by a set of model parameters. Here we define the models available in `amoeba2`.
 
-```python
-from amoeba2.model import AmoebaTauModel
+## `TauModel`
 
-# Initialize the model
-model = AmoebaTauModel(
-    n_gauss=4, # number of components
-    seed=1234, # random number generator seed
-    verbose=True
-)
+`TauModel` is a model that predicts the OH hyperfine optical depth spectra, typically measured via absorption observations. The `SpecData` keys for this model must be "tau_1612", "tau_1665", "tau_1667", and "tau_1720". The following diagram demonstrates the relationship between the free parameters (empty ellipses), deterministic quantities (rectangles), model predictions (filled ellipses), and observations (filled, round rectangles). Many of the parameters are internally normalized (and thus have names like `_norm`). The subsequent tables describe the model parameters in more detail.
 
-# Set the prior distributions
-# Normal distribution with mean = 0 and sigma = 1.0
-model.set_prior("center", "normal", np.array([0.0, 1.0]))
+![tau model graph](docs/source/notebooks/tau_model.png)
 
-# Normal distribution with mean = 0 and sigma = 0.25
-model.set_prior("log10_fwhm", "normal", np.array([0.0, 0.25]))
+| Cloud Parameter<br>`variable` | Parameter                                | Units    | Prior, where<br>($p_0, p_1, \dots$) = `prior_{variable}`     | Default<br>`prior_{variable}` |
+| :---------------------------- | :--------------------------------------- | :------- | :----------------------------------------------------------- | :---------------------------- |
+| `log10_N_0`                   | log10 lowest energy state column density | `cm-2`   | $\log_{10}N_0 \sim {\rm Normal}(\mu=p_0, \sigma=p_1)$        | `[13.0, 1.0]`                 |
+| `inv_Tex`                     | Inverse excitation temperature           | `K-1`    | $T_{\rm ex}^{-1} \sim {\rm Normal}(\mu=p_0, \sigma=p_1)$     | `[0.1, 1.0]`                  |
+| `fwhm`                        | FWHM line width                          | `km s-1` | $\Delta V_{\rm H} \sim {\rm Gamma}(\alpha=2.0, \beta=1.0/p)$ | `1.0`                         |  |
+| `velocity`                    | Velocity                                 | `km s-1` | $V \sim {\rm Normal}(\mu=p_0, \sigma=p_1)$                   | `[0.0, 10.0]`                 |
 
-# Normal distribution with mean = 0 and sigma = 0.25
-model.set_prior("peak_tau", "normal", np.array([0.0, 0.01]))
+| Hyper Parameter<br>`variable` | Parameter               | Units | Prior, where<br>($p_0, p_1, \dots$) = `prior_{variable}` | Default<br>`prior_{variable}` |
+| :---------------------------- | :---------------------- | :---- | :------------------------------------------------------- | :---------------------------- |
+| `rms_tau`                     | Optical depth rms noise | ``    | ${\rm rms}_\tau \sim {\rm HalfNormal}(\sigma=p)$         | `0.1`                         |
 
-# Add a Normal likelihood distribution
-model.add_likelihood("normal")
+## `TauTBModel`
 
-# Add the data
-model.set_data(data)
-# N.B. you can update the data using this function instead of re-specifying
-# the entire model (e.g., if your priors aren't changing between successive
-# runs of amoeba2)
+`TauTBModel` is otherwise identical to `TBModel`, except it also predicts the brightness temperature spectra assuming a given background source brightness temperature (where `bg_temp` is in `K` and is supplied during model initialization `TBTauModel(bg_temp=2.7)`). The `SpecData` keys for this model must be "tau_1612", "tau_1665", "tau_1667", "tau_1720", "TB_1612", "TB_1665", "TB_1667", and "TB_1720". The following diagram demonstrates the model, and the subsequent table describe the additional model parameters.
 
-# Generate prior predictive samples to test the prior distribution validity
-prior_predictive = model.prior_predictive_check(
-    samples=50, plot_fname="prior_predictive.png"
-)
+![tau model graph](docs/source/notebooks/tb_tau_model.png)
 
-# Sample the posterior distribution with 8 chains and 8 CPUs
-# using 1000 tuning iterations and then drawing 1000 samples
-model.fit(tune=1000, draws=1000, chains=8, cores=8)
+| Hyper Parameter<br>`variable` | Parameter                                 | Units | Prior, where<br>($p_0, p_1, \dots$) = `prior_{variable}` | Default<br>`prior_{variable}` |
+| :---------------------------- | :---------------------------------------- | :---- | :------------------------------------------------------- | :---------------------------- |
+| `rms_TB`                      | Brightness temperature spectral rms noise | ``    | ${\rm rms}_{T} \sim {\rm HalfNormal}(\sigma=p)$          | `1.0`                         |
 
-# Plot the posterior sample chains
-model.plot_traces("traces.png")
 
-# Generate posterior predictive samples to check posterior inference
-# thin = keep only every 50th posterior sample
-posterior_predictive = model.posterior_predictive_check(
-    thin=50, plot_fname="posterior_predictive.png"
-)
+## `ordered`
 
-# Plot the marginalized posterior samples. One plot is created
-# per component (named corner_0.png, corner_1.png, etc. in this example)
-# and one plot is created for the component-combined posterior
-# (named corner.png in this example). For simulated data, you can
-# supply the truths dictionary to overplot the "true" values
-model.plot_corner("corner.png", truths=truths)
+An additional parameter to `set_priors` for these models is `ordered`. By default, this parameter is `False`, in which case the order of the clouds is from *nearest* to *farthest*. Sampling from these models can be challenging due to the labeling degeneracy: if the order of clouds does not matter (i.e., the emission is optically thin), then each Markov chain could decide on a different, equally-valid order of clouds.
 
-# Get the posterior point estimate mean, standard deviation,
-# and 68% highest density interval
-summary = model.point_estimate(stats=["mean", "std", "hdi"], hdi_prob=0.68)
-print(summary['center'])
-```
+If we assume that the emission is optically thin, then we can set `ordered=True`, in which case the order of clouds is restricted to be increasing with velocity. This assumption can *drastically* improve sampling efficiency. When `ordered=True`, the `velocity` prior is defined differently:
 
-### Determining the optimal number of components
+| Cloud Parameter<br>`variable` | Parameter | Units    | Prior, where<br>($p_0, p_1, \dots$) = `prior_{variable}`                 | Default<br>`prior_{variable}` |
+| :---------------------------- | :-------- | :------- | :----------------------------------------------------------------------- | :---------------------------- |
+| `velocity`                    | Velocity  | `km s-1` | $V_i \sim p_0 + \sum_0^{i-1} V_i + {\rm Gamma}(\alpha=2, \beta=1.0/p_1)$ | `[0.0, 1.0]`                  |
 
-The `Amoeba` class is essentially a wrapper of many models, each with a different
-number of components. The same prior and likelihood distributions are assigned
-to each model. The initialization will look familiar:
+# Syntax & Examples
 
-```python
-from amoeba2.amoeba import Amoeba
+See the various tutorial notebooks under [docs/source/notebooks](https://github.com/tvwenger/amoeba2/tree/main/docs/source/notebooks). Tutorials and the full API are available here: https://amoeba2.readthedocs.io.
 
-# Initialize amoeba2
-amoeba = Amoeba(max_n_gauss=10, verbose=True, seed=1234)
+# Issues and Contributing
 
-# Add priors
-amoeba.set_prior("center", "normal", np.array([0.0, 1.0]))
-amoeba.set_prior("log10_fwhm", "normal", np.array([0.0, 0.25]))
-amoeba.set_prior("peak_tau", "normal", np.array([0.0, 0.01]))
+Anyone is welcome to submit issues or contribute to the development of this software via [Github](https://github.com/tvwenger/amoeba2).
 
-# Add likelihood
-amoeba.add_likelihood("normal")
+# License and Copyright
 
-# Add data
-amoeba.set_data(data)
+Copyright (c) 2024 Trey Wenger
 
-# models for each number of components are stored in this dictionary,
-# which is indexed by the number of components
-print(amoeba.models)
-# So you could interact with individual models via
-# amoeba.models[1].fit()
-```
+GNU General Public License v3 (GNU GPLv3)
 
-At this point there are two strategies for identifying the optimal number of components.
-Both will stop when the chain and component convergence checks pass, or when there
-are sampling divergences, or when the number of components exceeds `max_n_gauss` above,
-or when the BIC of the mean point estimate of the posterior samples increases twice in
-a row.
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published
+by the Free Software Foundation, either version 3 of the License,
+or (at your option) any later version.
 
-Otherwise, the difference is how `amoeba2` decides how many components to try in
-successive iterations. 
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
 
-```python
-# fit_all() will start with 1 component and increment by one each time
-# amoeba.fit_all(tune=1000, draws=1000, chains=8, cores=8)
-
-# fit_best() will start with 1 component, and at each iteration it will try
-# n_gauss set by the GMM prediction for the optimal number of components.
-amoeba.fit_best(tune=1000, draws=1000, chains=8, cores=8)
-```
-
-The "best" model -- the first one to pass the convergence checks, or otherwise the
-one with the lowest BIC, is saved in `amoeba.best_model`.
-
-```python
-print(amoeba.best_model.n_gauss)
-# 4
-
-posterior_predictive = amoeba.best_model.posterior_predictive_check(
-    thin=50, plot_fname="posterior_predictive.png"
-)
-amoeba.best_model.plot_corner("corner.png", truths=truths)
-```
-
-![Posterior Predictive](https://raw.githubusercontent.com/tvwenger/amoeba2/main/example/posterior_predictive.png)
-
-![Corner Plot](https://raw.githubusercontent.com/tvwenger/amoeba2/main/example/corner.png)
-
-## Known Issues
-
-1. `amoeba2` currently only implements fitting optical depth spectra, and not the
-more general case of optical depth and brightness temperature spectra as in the
-original `amoeba`.
-
-## Issues and Contributing
-
-Anyone is welcome to submit issues or contribute to the development
-of this software via [Github](https://github.com/tvwenger/amoeba2).
-
-## License and Copyright
-
-Copyright (c) 2023 Trey Wenger
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.

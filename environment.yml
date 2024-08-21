@@ -1,0 +1,34 @@
+name: amoeba2-dev
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - ipython
+  - jupyter_contrib_nbextensions
+  - jupyter_nbextensions_configurator
+  - ipywidgets
+  - versioneer
+  - black
+  - flake8
+  - numpy
+  - pymc>=5
+  - pytensor
+  - nutpie
+  - numba
+  - arviz
+  - matplotlib
+  - scipy
+  - scikit-learn
+  - graphviz
+  - jaxlib==0.4.28
+  - jax==0.4.28
+  - blackjax
+  - numpyro
+  - astropy
+  - astroquery
+  - pip
+  - pip:
+    - "sphinx_rtd_theme"
+    - "nbsphinx"
+    - "numpydoc"
+    - "bayes_spec>=1.6.2"
