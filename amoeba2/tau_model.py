@@ -35,7 +35,7 @@ from amoeba2 import physics
 class TauModel(BaseModel):
     """Definition of the TauModel. SpecData keys must be "tau_1612", "tau_1665", "tau_1667", and "tau_1720"."""
 
-    def __init__(self, mol_data: Optional[dict] = None, *args, **kwargs):
+    def __init__(self, *args, mol_data: Optional[dict] = None, **kwargs):
         """Initialize a new TauModel instance.
 
         Parameters
