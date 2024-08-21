@@ -24,6 +24,7 @@ import numpy as np
 
 from bayes_spec import SpecData
 from amoeba2 import TauModel
+from amoeba2.utils import get_molecule_data
 
 
 def test_tau_model():
@@ -36,6 +37,9 @@ def test_tau_model():
         "tau_1720": SpecData(velocity, brightness, 1.0),
     }
     model = TauModel(data, 2, baseline_degree=1)
+    assert isinstance(model.mol_data, dict)
+    mol_data = get_molecule_data()
+    model = TauModel(data, 2, baseline_degree=1, mol_data=mol_data)
     assert isinstance(model.mol_data, dict)
     model.add_priors()
     model.add_likelihood()
