@@ -35,13 +35,23 @@ from amoeba2 import physics
 class TauModel(BaseModel):
     """Definition of the TauModel. SpecData keys must be "tau_1612", "tau_1665", "tau_1667", and "tau_1720"."""
 
-    def __init__(self, *args, **kwargs):
-        """Initialize a new TauModel instance."""
+    def __init__(self, *args, mol_data: Optional[dict] = None, **kwargs):
+        """Initialize a new TauModel instance.
+
+        Parameters
+        ----------
+        mol_data : Optional[dict], optional
+            OH molecular data dictionary returned by get_molecule_data(). If None, it will
+            be downloaded. Default is None.
+        """
         # Initialize BaseModel
         super().__init__(*args, **kwargs)
 
         # get OH data
-        self.mol_data = get_molecule_data()
+        if mol_data is None:
+            self.mol_data = get_molecule_data()
+        else:
+            self.mol_data = mol_data
 
         # Add states, components to model
         self.model.add_coords(
