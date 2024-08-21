@@ -3,6 +3,7 @@
 ![publish](https://github.com/tvwenger/amoeba2/actions/workflows/publish.yml/badge.svg)
 ![tests](https://github.com/tvwenger/amoeba2/actions/workflows/tests.yml/badge.svg)
 [![Documentation Status](https://readthedocs.org/projects/amoeba2/badge/?version=latest)](https://amoeba2.readthedocs.io/en/latest/?badge=latest)
+[![codecov](https://codecov.io/gh/tvwenger/amoeba2/graph/badge.svg?token=QCDHJB3KWR)](https://codecov.io/gh/tvwenger/amoeba2)
 
 Automated Molecular Excitation Bayesian line-fitting Algorithm
 

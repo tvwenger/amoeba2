@@ -22,6 +22,9 @@ Installation
    :caption: Tutorials:
 
    notebooks/tau_model
+   notebooks/tb_tau_model
+   notebooks/optimization
+   notebooks/real_data
 
 .. toctree::
    :maxdepth: 2
