@@ -1,8 +1,3 @@
-.. amoeba2 documentation master file, created by
-   sphinx-quickstart on Tue Aug 20 12:17:15 2024.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
-
 amoeba2
 =======
 
@@ -15,6 +10,8 @@ Installation
 ============
 .. code-block::
 
+    conda create --name amoeba2 -c conda-forge pymc pip
+    conda activate amoeba2
     pip install amoeba2
 
 .. toctree::

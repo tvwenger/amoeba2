@@ -28,8 +28,10 @@ Read below to get started, and check out the tutorials here: https://amoeba2.rea
 
 ## Basic Installation
 
-Install with pip:
+Install with `pip` in a `conda` virtual environment:
 ```
+conda create --name amoeba2 -c conda-forge pymc pip
+conda activate amoeba2
 pip install amoeba2
 ```
 
