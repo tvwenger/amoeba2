@@ -26,8 +26,6 @@ from bayes_spec import SpecData
 from amoeba2 import AbsorptionModel
 from amoeba2.utils import get_molecule_data
 
-import pytest
-
 
 def test_absorption_model():
     velocity = np.linspace(-20.0, 20.0, 1000)
@@ -43,8 +41,6 @@ def test_absorption_model():
     mol_data = get_molecule_data()
     model = AbsorptionModel(data, 2, baseline_degree=1, mol_data=mol_data)
     assert isinstance(model.mol_data, dict)
-    with pytest.raises(ValueError):
-        model.add_priors(prior_Tex=[0.0, 10.0])
     model.add_priors()
     model.add_likelihood()
     assert model._validate()

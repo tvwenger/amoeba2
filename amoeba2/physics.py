@@ -74,31 +74,6 @@ def calc_nonthermal_fwhm(depth: float, nth_fwhm_1pc: float, depth_nth_fwhm_power
     return nth_fwhm_1pc * depth**depth_nth_fwhm_power
 
 
-def calc_boltzmann(gu: int, gl: int, freq: float, Tex: float) -> float:
-    """Evaluate the Boltzmann factor Nu/Nl, which is the ratio of column densities
-    in the upper and lower energy state.
-
-    Parameters
-    ----------
-    gu : int
-        Upper state degeneracy
-    gl : int
-        Lower state degeneracy
-    freq : float
-        Frequency (MHz)
-    Tex : float
-        Excitation temperature (K-1)
-
-    Returns
-    -------
-    float
-        Boltzmann factor
-    """
-    if Tex == 0.0:
-        return 0.0
-    return gu / gl * pt.exp(-_H * freq / (_K_B * Tex))
-
-
 def calc_Tex(gu: int, gl: int, freq: float, Nu: float, Nl: float) -> float:
     """Evaluate the excitation temperature from a given Botlzman factor Nu/Nl.
 
@@ -120,8 +95,6 @@ def calc_Tex(gu: int, gl: int, freq: float, Nu: float, Nl: float) -> float:
     float
         Excitation temperature
     """
-    if Nl == 0.0:
-        return np.inf
     return _H * freq / _K_B / pt.log(Nl * gu / (Nu * gl))
 
 
@@ -185,7 +158,6 @@ def calc_optical_depth(
     Iterable[float]
         Optical depth spectral (shape S x C)
     """
-    const = pt.switch(pt.gt(Nl, 0.0), 1.0 - gl * Nu / (gu * Nl), 0.0)
     return (
         _C_CM_MHZ**2.0  # cm2 MHz2
         / (8.0 * np.pi * freq**2.0)  # MHz-2
@@ -193,7 +165,7 @@ def calc_optical_depth(
         * Aul  # s-1
         * (_C * line_profile / (1e6 * freq))  # Hz-1
         * Nl  # cm-2
-        * const
+        * (1.0 - gl * Nu / (gu * Nl))
     )
 
 
@@ -213,7 +185,7 @@ def rj_temperature(freq: float, temp: float) -> float:
         R-J equivalent temperature (K)
     """
     const = _H * freq / _K_B
-    return pt.switch(pt.not_equal(temp, 0.0), const / (pt.exp(const / temp) - 1.0), 0.0)
+    return const / (pt.exp(const / temp) - 1.0)
 
 
 def radiative_transfer(

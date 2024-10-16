@@ -74,8 +74,8 @@ class EmissionAbsorptionModel(AbsorptionModel):
 
         with self.model:
             # Brightness temperature rms (K)
-            rms_emission_norm = pm.HalfNormal("rms_emission_norm", sigma=1.0, dims="component")
-            _ = pm.Deterministic("rms_emission", rms_emission_norm * prior_rms_emission, dims="component")
+            rms_emission_norm = pm.HalfNormal("rms_emission_norm", sigma=1.0, dims="transition")
+            _ = pm.Deterministic("rms_emission", rms_emission_norm * prior_rms_emission, dims="transition")
 
     def predict_emission_absorption(self) -> dict:
         """Predict the emission and absorption spectra from the model parameters.
@@ -89,7 +89,7 @@ class EmissionAbsorptionModel(AbsorptionModel):
         """
         emission = {}
         absorption = {}
-        for i, label in enumerate(self.model.coords["component"]):
+        for i, label in enumerate(self.model.coords["transition"]):
             # Line profile (km-1 s; shape: spectral, cloud)
             line_profile_tau = physics.calc_line_profile(
                 self.data[f"absorption_{label}"].spectral,
@@ -143,7 +143,7 @@ class EmissionAbsorptionModel(AbsorptionModel):
         baseline_models = self.predict_baseline()
 
         with self.model:
-            for i, label in enumerate(self.model.coords["component"]):
+            for i, label in enumerate(self.model.coords["transition"]):
                 _ = pm.Normal(
                     f"absorption_{label}",
                     mu=absorption[label] + baseline_models[f"absorption_{label}"],
