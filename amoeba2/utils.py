@@ -29,6 +29,17 @@ from numpy.polynomial import Polynomial
 import astropy.units as u
 from astroquery.jplspec import JPLSpec
 
+# OH state degeneracies
+_G = [3, 5, 3, 5]
+
+# OH states (upper, lower) associated with transitions
+_OH = {
+    "1612": [2, 1],
+    "1665": [2, 0],
+    "1667": [3, 1],
+    "1720": [3, 0],
+}
+
 
 def get_molecule_data(
     molecule: Optional[str] = "OH",
@@ -88,9 +99,7 @@ def get_molecule_data(
 
     # limit states
     if rot_state_lower is not None:
-        output_rot_state = np.array(
-            [int(output['QN"'][i][3:5]) for i in range(len(output))]
-        )
+        output_rot_state = np.array([int(output['QN"'][i][3:5]) for i in range(len(output))])
         good = output_rot_state == rot_state_lower
         output = output[good]
 
@@ -116,11 +125,7 @@ def get_molecule_data(
     logint = np.array(output["LGINT"])  # this should just be a number
     # from CDMS website
     sijmu = (
-        (
-            np.exp(np.float64(-(elower_icm / 0.695) / CT))
-            - np.exp(np.float64(-(eupper_icm / 0.695) / CT))
-        )
-        ** (-1)
+        (np.exp(np.float64(-(elower_icm / 0.695) / CT)) - np.exp(np.float64(-(eupper_icm / 0.695) / CT))) ** (-1)
         * ((10**logint) / freq_MHz)
         * (24025.120666)
         * 10.0 ** log10_Q_terms[0]

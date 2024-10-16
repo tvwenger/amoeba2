@@ -35,7 +35,46 @@ _C = c.c.to("km s-1").value
 _C_CM_MHZ = c.c.to("cm MHz").value
 
 
-def calc_boltzmann(gu: int, gl: int, freq: float, inv_Tex: float) -> float:
+def calc_thermal_fwhm(kinetic_temp: float) -> float:
+    """Calculate the thermal line broadening assuming a Maxwellian velocity distribution
+    (Condon & Ransom eq. 7.35)
+
+    Parameters
+    ----------
+    kinetic_temp : float
+        Kinetic temperature (K)
+
+    Returns
+    -------
+    float
+        Thermal FWHM line width (km s-1)
+    """
+    # constant for OH: molecular weight = 17 m_p
+    const = 0.04195791  # km/s K-1/2
+    return const * pt.sqrt(kinetic_temp)
+
+
+def calc_nonthermal_fwhm(depth: float, nth_fwhm_1pc: float, depth_nth_fwhm_power: float) -> float:
+    """Calculate the non-thermal line broadening assuming a power-law size-linewidth relationship.
+
+    Parameters
+    ----------
+    depth : float
+        Line-of-sight depth (pc)
+    nth_fwhm_1pc : float
+        Non-thermal broadening at 1 pc (km s-1)
+    depth_nth_fwhm_power : float
+        Power law index
+
+    Returns
+    -------
+    float
+        Non-thermal FWHM line width (km s-1)
+    """
+    return nth_fwhm_1pc * depth**depth_nth_fwhm_power
+
+
+def calc_boltzmann(gu: int, gl: int, freq: float, Tex: float) -> float:
     """Evaluate the Boltzmann factor Nu/Nl, which is the ratio of column densities
     in the upper and lower energy state.
 
@@ -47,20 +86,46 @@ def calc_boltzmann(gu: int, gl: int, freq: float, inv_Tex: float) -> float:
         Lower state degeneracy
     freq : float
         Frequency (MHz)
-    inv_Tex : float
-        Inverse excitation temperature (K-1)
+    Tex : float
+        Excitation temperature (K-1)
 
     Returns
     -------
     float
         Boltzmann factor
     """
-    return gu / gl * pt.exp(-_H * freq * inv_Tex / _K_B)
+    if Tex == 0.0:
+        return 0.0
+    return gu / gl * pt.exp(-_H * freq / (_K_B * Tex))
 
 
-def calc_line_profile(
-    velo_axis: Iterable[float], velocity: Iterable[float], fwhm: Iterable[float]
-) -> Iterable[float]:
+def calc_Tex(gu: int, gl: int, freq: float, Nu: float, Nl: float) -> float:
+    """Evaluate the excitation temperature from a given Botlzman factor Nu/Nl.
+
+    Parameters
+    ----------
+    gu : int
+        Upper state degeneracy
+    gl : int
+        Lower state degeneracy
+    freq : float
+        Frequency (MHz)
+    Nu : float
+        Upper state column density (cm-2)
+    Nl : float
+        Lower state column density (cm-2)
+
+    Returns
+    -------
+    float
+        Excitation temperature
+    """
+    if Nl == 0.0:
+        return np.inf
+    return _H * freq / _K_B / pt.log(Nl * gu / (Nu * gl))
+
+
+def calc_line_profile(velo_axis: Iterable[float], velocity: Iterable[float], fwhm: Iterable[float]) -> Iterable[float]:
     """Evaluate the Gaussian line profile, ensuring normalization.
 
     Parameters
@@ -88,8 +153,10 @@ def calc_line_profile(
 
 
 def calc_optical_depth(
-    N_u: Iterable[float],
-    inv_Tex: Iterable[float],
+    gu: int,
+    gl: int,
+    Nu: Iterable[float],
+    Nl: Iterable[float],
     line_profile: Iterable[float],
     freq: float,
     Aul: float,
@@ -98,10 +165,14 @@ def calc_optical_depth(
 
     Parameters
     ----------
-    N_u : Iterable[float]
+    gu : int
+        Upper state degeneracy
+    gl : int
+        Lower state degeneracy
+    Nu : Iterable[float]
         Cloud upper state column densities (cm-2; length C)
-    inv_Tex : Iterable[float]
-        Cloud inverse excitation temperatures (K-1; length C)
+    Nl : Iterable[float]
+        Cloud lower state column densities (cm-2; length C)
     line_profile : Iterable[float]
         Line profile (km-1 s; shape S x C)
     freq : float
@@ -114,14 +185,15 @@ def calc_optical_depth(
     Iterable[float]
         Optical depth spectral (shape S x C)
     """
-    const = _H * freq * inv_Tex / _K_B
+    const = pt.switch(pt.gt(Nl, 0.0), 1.0 - gl * Nu / (gu * Nl), 0.0)
     return (
         _C_CM_MHZ**2.0  # cm2 MHz2
         / (8.0 * np.pi * freq**2.0)  # MHz-2
-        * (pt.exp(const[None, :]) - 1.0)
+        * (gu / gl)
         * Aul  # s-1
         * (_C * line_profile / (1e6 * freq))  # Hz-1
-        * N_u[None, :]  # cm-2
+        * Nl  # cm-2
+        * const
     )
 
 
@@ -141,13 +213,13 @@ def rj_temperature(freq: float, temp: float) -> float:
         R-J equivalent temperature (K)
     """
     const = _H * freq / _K_B
-    return const / (pt.exp(const / temp) - 1.0)
+    return pt.switch(pt.not_equal(temp, 0.0), const / (pt.exp(const / temp) - 1.0), 0.0)
 
 
 def radiative_transfer(
     freq: float,
     tau: Iterable[float],
-    inv_Tex: Iterable[float],
+    Tex: Iterable[float],
     bg_temp: float,
 ) -> Iterable[float]:
     """Evaluate the radiative transfer to predict the emission spectrum. The emission
@@ -161,8 +233,8 @@ def radiative_transfer(
         Frequency (MHz)
     tau : Iterable[float]
         Optical depth spectra (shape S x N)
-    inv_Tex : Iterable[float]
-        Cloud inverse excitation temperature (K-1; length N)
+    Tex : Iterable[float]
+        Cloud excitation temperature (K; length N)
     bg_temp : float
         Assumed background temperature
 
@@ -177,7 +249,7 @@ def radiative_transfer(
     # radiative transfer, assuming filling factor = 1.0
     emission_bg = rj_temperature(freq, bg_temp)
     emission_bg_attenuated = emission_bg * pt.exp(-sum_tau[:, -1])
-    emission_clouds = rj_temperature(freq, 1.0 / inv_Tex) * (1.0 - pt.exp(-tau))
+    emission_clouds = rj_temperature(freq, Tex) * (1.0 - pt.exp(-tau))
     emission_clouds_attenuated = emission_clouds * pt.exp(-sum_tau[:, :-1])
     emission = emission_bg_attenuated + emission_clouds_attenuated.sum(axis=1)
 
