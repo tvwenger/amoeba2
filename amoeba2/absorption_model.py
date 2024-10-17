@@ -24,6 +24,7 @@ from typing import Iterable, Optional
 
 import pymc as pm
 import pytensor.tensor as pt
+import numpy as np
 
 from bayes_spec import BaseModel
 
@@ -89,7 +90,7 @@ class AbsorptionModel(BaseModel):
     def add_priors(
         self,
         prior_log10_N0: Iterable[float] = [13.0, 1.0],
-        prior_log10_N_ratio: Iterable[float] = 0.01,
+        prior_log_boltz_factor: float = 0.1,
         prior_log10_depth: Iterable[float] = [0.0, 0.25],
         prior_log10_Tkin: Iterable[float] = [2.0, 1.0],
         prior_velocity: Iterable[float] = [0.0, 10.0],
@@ -107,18 +108,15 @@ class AbsorptionModel(BaseModel):
         prior_log10_N0 : Iterable[float], optional
             Prior distribution on log10 column density (cm-2) in lowest energy state, by default [13.0, 1.0], where
             log10_N0 ~ Normal(mu=prior[0], sigma=prior[1])
-        prior_log10_N_ratio : float, optional
-            Prior distribution on log10 column density ratio between states, by default 0.01, where
-            log10_N_ratio ~ Normal(mu=0.0, sigma=prior)
+        prior_log_boltz_factor : float, optional
+            Prior distribution on log Boltzmann factor = -h*freq/(k*Tex), by default 0.1, where
+            log_boltz_factor ~ Normal(mu=0.0, sigma=prior)
         prior_log10_depth : Iterable[float], optional
             Prior distribution on log10 depth (pc), by default [0.0, 0.25], where
             log10_depth ~ Normal(mu=prior[0], sigma=prior[1])
         prior_log10_Tkin : Iterable[float], optional
             Prior distribution on log10 kinetic temperature (K), by default [2.0, 1.0], where
             log10_Tkin ~ Normal(mu=prior[0], sigma=prior[1])
-        prior_Tex : Iterable[float], optional
-            Prior distribution on excitation temperature (K), by default [10.0, 10.0], where
-            Tex ~ Normal(mu=prior[0], sigma=prior[1])
         prior_velocity : Iterable[float], optional
             Prior distribution on centroid velocity (km s-1), by default [0.0, 10.0], where
             velocity ~ Normal(mu=prior[0], sigma=prior[1])
@@ -141,60 +139,73 @@ class AbsorptionModel(BaseModel):
             velocity(cloud = n) ~ prior[0] + sum_i(velocity[i < n]) + Gamma(alpha=2.0, beta=1.0/prior[1])
         mainline_pos_Tex: bool, optional
             If True, assume positive main line excitation temperatures, by default False. If True, the
-            prior distribution on the column density ratios for the main lines (1665 and 1667) becomes
-            log10_N_ratio ~ HalfNormal(sigma=prior)
+            prior distribution on the Boltzmann factor for the main lines (1665 and 1667) becomes
+            log_boltz_factor ~ HalfNormal(sigma=prior)
         """
         # add polynomial baseline priors
         super().add_baseline_priors(prior_baseline_coeffs=prior_baseline_coeffs)
 
         with self.model:
-            # N0 column density (cm-2; shape: clouds)
+            # state 0 column density (cm-2; shape: clouds)
             log10_N0_norm = pm.Normal("log10_N0_norm", mu=0.0, sigma=1.0, dims="cloud")
             log10_N0 = pm.Deterministic("log10_N0", prior_log10_N0[0] + prior_log10_N0[1] * log10_N0_norm, dims="cloud")
 
-            # N1/N2 column density ratio (shape: clouds)
-            log10_N1_N2_ratio_norm = pm.Normal("log10_N1_N2_ratio_norm", mu=0.0, sigma=1.0, dims="cloud")
-            log10_N1_N2_ratio = pm.Deterministic(
-                "log10_N1_N2_ratio", prior_log10_N_ratio * log10_N1_N2_ratio_norm, dims="cloud"
+            # 1 -> 2 Boltzmann factor (shape: clouds)
+            log_boltz_factor12_norm = pm.Normal("log_boltz_factor12_norm", mu=0.0, sigma=1.0, dims="cloud")
+            log_boltz_factor12 = pm.Deterministic(
+                "log_boltz_factor12", prior_log_boltz_factor * log_boltz_factor12_norm, dims="cloud"
             )
 
             if mainline_pos_Tex:
-                # N0/N2 column density ratio (shape: clouds)
-                # force N2 < N0
-                log10_N0_N2_ratio_norm = pm.Gamma("log10_N0_N2_ratio_norm", alpha=2.0, beta=1.0, dims="cloud")
-                log10_N0_N2_ratio = pm.Deterministic(
-                    "log10_N0_N2_ratio", prior_log10_N_ratio * log10_N0_N2_ratio_norm, dims="cloud"
+                # 0 -> 2 Boltzmann factor must be positive (shape: clouds)
+                log_boltz_factor02_norm = pm.HalfNormal("log_boltz_factor02_norm", sigma=1.0, dims="cloud")
+                log_boltz_factor02 = pm.Deterministic(
+                    "log_boltz_factor02", prior_log_boltz_factor * log_boltz_factor02_norm, dims="cloud"
                 )
 
-                # N1/N3 column density ratio (shape: clouds)
-                # force N3 < N1
-                log10_N1_N3_ratio_norm = pm.Gamma("log10_N1_N3_ratio_norm", alpha=2.0, beta=1.0, dims="cloud")
-                log10_N1_N3_ratio = pm.Deterministic(
-                    "log10_N1_N3_ratio", prior_log10_N_ratio * log10_N1_N3_ratio_norm, dims="cloud"
+                # 1 -> 3 Boltzmann factor must be positive (shape: clouds)
+                log_boltz_factor13_norm = pm.HalfNormal("log_boltz_factor13_norm", sigma=1.0, dims="cloud")
+                log_boltz_factor13 = pm.Deterministic(
+                    "log_boltz_factor13", prior_log_boltz_factor * log_boltz_factor13_norm, dims="cloud"
                 )
             else:
-                # N0/N2 column density ratio (shape: clouds)
-                log10_N0_N2_ratio_norm = pm.Normal("log10_N0_N2_ratio_norm", mu=0.0, sigma=1.0, dims="cloud")
-                log10_N0_N2_ratio = pm.Deterministic(
-                    "log10_N0_N2_ratio", prior_log10_N_ratio * log10_N0_N2_ratio_norm, dims="cloud"
+                # 0 -> 2 Boltzmann factor (shape: clouds)
+                log_boltz_factor02_norm = pm.Normal("log_boltz_factor02_norm", mu=0.0, sigma=1.0, dims="cloud")
+                log_boltz_factor02 = pm.Deterministic(
+                    "log_boltz_factor02", prior_log_boltz_factor * log_boltz_factor02_norm, dims="cloud"
                 )
 
-                # N1/N3 column density ratio (shape: clouds)
-                log10_N1_N3_ratio_norm = pm.Normal("log10_N1_N3_ratio_norm", mu=0.0, sigma=1.0, dims="cloud")
-                log10_N1_N3_ratio = pm.Deterministic(
-                    "log10_N1_N3_ratio", prior_log10_N_ratio * log10_N1_N3_ratio_norm, dims="cloud"
+                # 1 -> 3 Boltzmann factor (shape: clouds)
+                log_boltz_factor13_norm = pm.Normal("log_boltz_factor13_norm", mu=0.0, sigma=1.0, dims="cloud")
+                log_boltz_factor13 = pm.Deterministic(
+                    "log_boltz_factor13", prior_log_boltz_factor * log_boltz_factor13_norm, dims="cloud"
                 )
 
-            # solve
-            log10_N2 = log10_N0 - log10_N0_N2_ratio
-            log10_N1 = log10_N2 + log10_N1_N2_ratio
-            log10_N3 = log10_N1 - log10_N1_N3_ratio
-
-            # All state column densities (cm-2; shape: state, cloud)
-            log10_N = pm.Deterministic(
+            # State column density (cm-2; shape: state, cloud)
+            log10_N2 = log10_N0 - log_boltz_factor02 * np.log10(np.e) - pt.log10(_G[0] / _G[2])
+            log10_N1 = log10_N2 + log_boltz_factor12 * np.log10(np.e) + pt.log10(_G[1] / _G[2])
+            log10_N3 = log10_N1 - log_boltz_factor13 * np.log10(np.e) - pt.log10(_G[1] / _G[3])
+            _ = pm.Deterministic(
                 "log10_N",
                 pt.stack([log10_N0, log10_N1, log10_N2, log10_N3]),
                 dims=["state", "cloud"],
+            )
+
+            # save Boltzman factors (shape: transitions, clouds)
+            # 1612 MHz 2 -> 1
+            log_boltz_factor_1612 = -log_boltz_factor12
+            # 1665 MHz 2 -> 0
+            log_boltz_factor_1665 = -log_boltz_factor02
+            # 1667 MHz 3 -> 1
+            log_boltz_factor_1667 = -log_boltz_factor13
+            # 1720 MHz 3 -> 0
+            log_N3 = log10_N3 / np.log10(np.e)
+            log_N0 = log10_N0 / np.log10(np.e)
+            log_boltz_factor_1720 = log_N3 - log_N0 + pt.log(_G[0] / _G[3])
+            log_boltz_factor = pm.Deterministic(
+                "log_boltz_factor",
+                pt.stack([log_boltz_factor_1612, log_boltz_factor_1665, log_boltz_factor_1667, log_boltz_factor_1720]),
+                dims=["transition", "cloud"],
             )
 
             # depth (pc; shape: clouds)
@@ -265,18 +276,7 @@ class AbsorptionModel(BaseModel):
             # Excitation temperatures (K; shape: clouds)
             _ = pm.Deterministic(
                 "Tex",
-                pt.stack(
-                    [
-                        physics.calc_Tex(
-                            _G[_OH[label][0]],
-                            _G[_OH[label][1]],
-                            self.mol_data["freq"][i],
-                            10.0 ** log10_N[_OH[label][0]],
-                            10.0 ** log10_N[_OH[label][1]],
-                        )
-                        for i, label in enumerate(self.model.coords["transition"])
-                    ]
-                ),
+                pt.stack([physics.calc_Tex(freq, log_boltz_factor[i]) for i, freq in enumerate(self.mol_data["freq"])]),
                 dims=["transition", "cloud"],
             )
 
@@ -305,8 +305,8 @@ class AbsorptionModel(BaseModel):
             tau_spectrum = physics.calc_optical_depth(
                 _G[_OH[label][0]],
                 _G[_OH[label][1]],
-                10.0 ** self.model["log10_N"][_OH[label][0]],
                 10.0 ** self.model["log10_N"][_OH[label][1]],
+                pt.exp(self.model["log_boltz_factor"][i]),
                 line_profile,
                 self.mol_data["freq"][i],
                 self.mol_data["Aul"][i],

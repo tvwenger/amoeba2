@@ -74,28 +74,22 @@ def calc_nonthermal_fwhm(depth: float, nth_fwhm_1pc: float, depth_nth_fwhm_power
     return nth_fwhm_1pc * depth**depth_nth_fwhm_power
 
 
-def calc_Tex(gu: int, gl: int, freq: float, Nu: float, Nl: float) -> float:
-    """Evaluate the excitation temperature from a given Botlzman factor Nu/Nl.
+def calc_Tex(freq: float, log_boltz_factor: float) -> float:
+    """Evaluate the excitation temperature from a given Boltzmann factor.
 
     Parameters
     ----------
-    gu : int
-        Upper state degeneracy
-    gl : int
-        Lower state degeneracy
     freq : float
         Frequency (MHz)
-    Nu : float
-        Upper state column density (cm-2)
-    Nl : float
-        Lower state column density (cm-2)
+    log_boltz_factor : float
+        log Boltzmann factor = -h*freq/(k*Tex)
 
     Returns
     -------
     float
         Excitation temperature
     """
-    return _H * freq / _K_B / pt.log(Nl * gu / (Nu * gl))
+    return -_H * freq / (_K_B * log_boltz_factor)
 
 
 def calc_line_profile(velo_axis: Iterable[float], velocity: Iterable[float], fwhm: Iterable[float]) -> Iterable[float]:
@@ -128,8 +122,8 @@ def calc_line_profile(velo_axis: Iterable[float], velocity: Iterable[float], fwh
 def calc_optical_depth(
     gu: int,
     gl: int,
-    Nu: Iterable[float],
     Nl: Iterable[float],
+    boltz_factor: Iterable[float],
     line_profile: Iterable[float],
     freq: float,
     Aul: float,
@@ -142,10 +136,10 @@ def calc_optical_depth(
         Upper state degeneracy
     gl : int
         Lower state degeneracy
-    Nu : Iterable[float]
-        Cloud upper state column densities (cm-2; length C)
     Nl : Iterable[float]
         Cloud lower state column densities (cm-2; length C)
+    boltz_factor : Iterable[float]
+        Boltzmann factor = exp(-h*freq/(k*Tex)) (length C)
     line_profile : Iterable[float]
         Line profile (km-1 s; shape S x C)
     freq : float
@@ -165,7 +159,7 @@ def calc_optical_depth(
         * Aul  # s-1
         * (_C * line_profile / (1e6 * freq))  # Hz-1
         * Nl  # cm-2
-        * (1.0 - gl * Nu / (gu * Nl))
+        * (1.0 - boltz_factor)
     )
 
 
