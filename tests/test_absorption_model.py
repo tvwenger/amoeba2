@@ -62,7 +62,7 @@ def test_absorption_model_ordered():
     assert model._validate()
 
 
-def test_absorption_model_mainline_pos_Tex():
+def test_absorption_model_mainline_pos_tau():
     velocity = np.linspace(-20.0, 20.0, 1000)
     brightness = np.random.randn(1000)
     data = {
@@ -73,6 +73,6 @@ def test_absorption_model_mainline_pos_Tex():
     }
     model = AbsorptionModel(data, 2, baseline_degree=1)
     assert isinstance(model.mol_data, dict)
-    model.add_priors(mainline_pos_Tex=True)
+    model.add_priors(mainline_pos_tau=True)
     model.add_likelihood()
     assert model._validate()

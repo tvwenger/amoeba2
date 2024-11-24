@@ -4,12 +4,14 @@ channels:
   - defaults
 dependencies:
   - ipython
-  - jupyter_contrib_nbextensions
-  - jupyter_nbextensions_configurator
+  - jupyter
+  - ipykernel
   - ipywidgets
   - versioneer
   - black
   - flake8
+  - pytest
+  - pytest-cov
   - numpy
   - pymc>=5
   - pytensor
@@ -20,8 +22,8 @@ dependencies:
   - scipy
   - scikit-learn
   - graphviz
-  - jaxlib==0.4.28
-  - jax==0.4.28
+  - jaxlib
+  - jax
   - blackjax
   - numpyro
   - astropy
@@ -31,4 +33,4 @@ dependencies:
     - "sphinx_rtd_theme"
     - "nbsphinx"
     - "numpydoc"
-    - "bayes_spec>=1.7.1"
+    - "bayes_spec>=1.7.2"

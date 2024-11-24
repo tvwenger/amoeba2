@@ -3,4 +3,4 @@ nbsphinx
 numpydoc
 astropy
 astroquery
-bayes_spec>=1.7.1
+bayes_spec>=1.7.2

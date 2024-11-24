@@ -44,3 +44,43 @@ def test_emission_absorption_model():
     model.add_priors()
     model.add_likelihood()
     assert model._validate()
+
+
+def test_emission_absorption_model_ordered():
+    velocity = np.linspace(-20.0, 20.0, 1000)
+    brightness = np.random.randn(1000)
+    data = {
+        "absorption_1612": SpecData(velocity, brightness, 1.0),
+        "absorption_1665": SpecData(velocity, brightness, 1.0),
+        "absorption_1667": SpecData(velocity, brightness, 1.0),
+        "absorption_1720": SpecData(velocity, brightness, 1.0),
+        "emission_1612": SpecData(velocity, brightness, 1.0),
+        "emission_1665": SpecData(velocity, brightness, 1.0),
+        "emission_1667": SpecData(velocity, brightness, 1.0),
+        "emission_1720": SpecData(velocity, brightness, 1.0),
+    }
+    model = EmissionAbsorptionModel(data, 2, baseline_degree=1)
+    assert isinstance(model.mol_data, dict)
+    model.add_priors(ordered=True)
+    model.add_likelihood()
+    assert model._validate()
+
+
+def test_emission_absorption_model_mainline_pos_tau():
+    velocity = np.linspace(-20.0, 20.0, 1000)
+    brightness = np.random.randn(1000)
+    data = {
+        "absorption_1612": SpecData(velocity, brightness, 1.0),
+        "absorption_1665": SpecData(velocity, brightness, 1.0),
+        "absorption_1667": SpecData(velocity, brightness, 1.0),
+        "absorption_1720": SpecData(velocity, brightness, 1.0),
+        "emission_1612": SpecData(velocity, brightness, 1.0),
+        "emission_1665": SpecData(velocity, brightness, 1.0),
+        "emission_1667": SpecData(velocity, brightness, 1.0),
+        "emission_1720": SpecData(velocity, brightness, 1.0),
+    }
+    model = EmissionAbsorptionModel(data, 2, baseline_degree=1)
+    assert isinstance(model.mol_data, dict)
+    model.add_priors(mainline_pos_tau=True)
+    model.add_likelihood()
+    assert model._validate()

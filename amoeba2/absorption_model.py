@@ -3,32 +3,17 @@ AbsorptionModel definition
 
 Copyright(C) 2024 by
 Trey V. Wenger; tvwenger@gmail.com
-
-GNU General Public License v3 (GNU GPLv3)
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published
-by the Free Software Foundation, either version 3 of the License,
-or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>.
+This code is licensed under MIT license (see LICENSE for details)
 """
 
 from typing import Iterable, Optional
 
 import pymc as pm
 import pytensor.tensor as pt
-import numpy as np
 
 from bayes_spec import BaseModel
 
-from amoeba2.utils import _G, _OH, get_molecule_data
+from amoeba2.utils import get_molecule_data
 from amoeba2 import physics
 
 
@@ -54,63 +39,59 @@ class AbsorptionModel(BaseModel):
         else:
             self.mol_data = mol_data
 
-        # Add states, transitions to model
-        self.model.add_coords(
-            {
-                "state": [0, 1, 2, 3],
-                "transition": ["1612", "1665", "1667", "1720"],
-            }
-        )
-
         # Select features used for posterior clustering
         self._cluster_features += [
-            "log10_N0",
+            "tau_1612",
+            "tau_1665",
+            "tau_1667",
             "velocity",
             "fwhm",
         ]
 
+        # Add transitions to model
+        self.model.add_coords(
+            {
+                "transition": ["1612", "1665", "1667", "1720"],
+            }
+        )
+
         # Define TeX representation of each parameter
         self.var_name_map.update(
             {
-                "log10_N0": r"$\log_{10} N_0$ (cm$^{-2}$)",
+                "tau_1612": r"$\tau_{1612}$",
+                "tau_1665": r"$\tau_{1665}$",
+                "tau_1667": r"$\tau_{1667}$",
+                "tau_1720": r"$\tau_{1720}$",
                 "log10_depth": r"log$_{10}$ $d$ (pc)",
                 "log10_Tkin": r"$\log_{10} T_{\rm kin}$ (K)",
-                "Tex": r"$T_{\rm ex}$ (K)",
                 "velocity": r"$V_{\rm LSR}$ (km s$^{-1}$)",
                 "log10_nth_fwhm_1pc": r"log$_{10}$ $\Delta V_{\rm 1 pc}$ (km s$^{-1}$)",
                 "depth_nth_fwhm_power": r"$\alpha$",
-                "log10_N": r"$\log_{10} N$ (cm$^{-2}$)",
                 "fwhm_thermal": r"$\Delta V_{\rm th}$ (km s$^{-1}$)",
                 "fwhm_nonthermal": r"$\Delta V_{\rm nth}$ (km s$^{-1}$)",
                 "fwhm": r"$\Delta V$ (km s$^{-1}$)",
-                "rms_absorption": r"rms$_{\tau}$",
             }
         )
 
     def add_priors(
         self,
-        prior_log10_N0: Iterable[float] = [13.0, 1.0],
-        prior_log_boltz_factor: float = 0.1,
+        prior_tau: Iterable[float] = [0.1, 0.1],
         prior_log10_depth: Iterable[float] = [0.0, 0.25],
         prior_log10_Tkin: Iterable[float] = [2.0, 1.0],
         prior_velocity: Iterable[float] = [0.0, 10.0],
         prior_log10_nth_fwhm_1pc: Iterable[float] = [0.2, 0.1],
         prior_depth_nth_fwhm_power: Iterable[float] = [0.4, 0.1],
-        prior_rms_absorption: float = 0.1,
         prior_baseline_coeffs: Optional[dict[str, Iterable[float]]] = None,
         ordered: bool = False,
-        mainline_pos_Tex: bool = False,
+        mainline_pos_tau: bool = False,
     ):
         """Add priors and deterministics to the model.
 
         Parameters
         ----------
-        prior_log10_N0 : Iterable[float], optional
-            Prior distribution on log10 column density (cm-2) in lowest energy state, by default [13.0, 1.0], where
-            log10_N0 ~ Normal(mu=prior[0], sigma=prior[1])
-        prior_log_boltz_factor : float, optional
-            Prior distribution on log Boltzmann factor = -h*freq/(k*Tex), by default 0.1, where
-            log_boltz_factor ~ Normal(mu=0.0, sigma=prior)
+        prior_tau : float, optional
+            Prior distribution on optical depth, by default [0.1, 0.1], where
+            tau ~ Normal(mu=prior[0], sigma=prior[1])
         prior_log10_depth : Iterable[float], optional
             Prior distribution on log10 depth (pc), by default [0.0, 0.25], where
             log10_depth ~ Normal(mu=prior[0], sigma=prior[1])
@@ -126,9 +107,6 @@ class AbsorptionModel(BaseModel):
         prior_depth_nth_fwhm_power : Iterable[float], optional
             Prior distribution on depth vs. non-thermal line width power law index, by default [0.4, 0.1], where
             depth_nth_fwhm_power ~ Normal(mu=prior[0], sigma=prior[1])
-        prior_rms_absorption : float, optional
-            Prior distribution on absorption spectral rms, by default 0.1, where
-            rms_absorption ~ HalfNormal(sigma=prior)
         prior_baseline_coeffs : Optional[dict[str, Iterable[float]]], optional
             Width of normal prior distribution on the normalized baseline polynomial coefficients.
             Keys are dataset names and values are lists of length `baseline_degree+1`. If None, use
@@ -137,76 +115,34 @@ class AbsorptionModel(BaseModel):
             If True, assume ordered velocities (optically thin assumption), by default False. If True, the prior
             distribution on the velocity becomes
             velocity(cloud = n) ~ prior[0] + sum_i(velocity[i < n]) + Gamma(alpha=2.0, beta=1.0/prior[1])
-        mainline_pos_Tex: bool, optional
-            If True, assume positive main line excitation temperatures, by default False. If True, the
-            prior distribution on the Boltzmann factor for the main lines (1665 and 1667) becomes
-            log_boltz_factor ~ HalfNormal(sigma=prior)
+        mainline_pos_tau: bool, optional
+            If True, assume positive main line optical depths, by default False. If True, the
+            prior distribution on the main line (1665 and 1667 MHz) optical depths becomes
+            tau ~ HalfNormal(sigma=prior[1])
         """
         # add polynomial baseline priors
         super().add_baseline_priors(prior_baseline_coeffs=prior_baseline_coeffs)
 
         with self.model:
-            # state 0 column density (cm-2; shape: clouds)
-            log10_N0_norm = pm.Normal("log10_N0_norm", mu=0.0, sigma=1.0, dims="cloud")
-            log10_N0 = pm.Deterministic("log10_N0", prior_log10_N0[0] + prior_log10_N0[1] * log10_N0_norm, dims="cloud")
+            # optical depth
+            tau_1612_norm = pm.Normal("tau_1612_norm", mu=0.0, sigma=1.0, dims="cloud")
+            tau_1612 = pm.Deterministic("tau_1612", prior_tau[0] + tau_1612_norm * prior_tau[1], dims="cloud")
 
-            # 1 -> 2 Boltzmann factor (shape: clouds)
-            log_boltz_factor12_norm = pm.Normal("log_boltz_factor12_norm", mu=0.0, sigma=1.0, dims="cloud")
-            log_boltz_factor12 = pm.Deterministic(
-                "log_boltz_factor12", prior_log_boltz_factor * log_boltz_factor12_norm, dims="cloud"
-            )
+            if mainline_pos_tau:
+                tau_1665_norm = pm.HalfNormal("tau_1665_norm", sigma=1.0, dims="cloud")
+                tau_1665 = pm.Deterministic("tau_1665", tau_1665_norm * prior_tau[1], dims="cloud")
 
-            if mainline_pos_Tex:
-                # 0 -> 2 Boltzmann factor must be positive (shape: clouds)
-                log_boltz_factor02_norm = pm.HalfNormal("log_boltz_factor02_norm", sigma=1.0, dims="cloud")
-                log_boltz_factor02 = pm.Deterministic(
-                    "log_boltz_factor02", prior_log_boltz_factor * log_boltz_factor02_norm, dims="cloud"
-                )
-
-                # 1 -> 3 Boltzmann factor must be positive (shape: clouds)
-                log_boltz_factor13_norm = pm.HalfNormal("log_boltz_factor13_norm", sigma=1.0, dims="cloud")
-                log_boltz_factor13 = pm.Deterministic(
-                    "log_boltz_factor13", prior_log_boltz_factor * log_boltz_factor13_norm, dims="cloud"
-                )
+                tau_1667_norm = pm.HalfNormal("tau_1667_norm", sigma=1.0, dims="cloud")
+                tau_1667 = pm.Deterministic("tau_1667", tau_1667_norm * prior_tau[1], dims="cloud")
             else:
-                # 0 -> 2 Boltzmann factor (shape: clouds)
-                log_boltz_factor02_norm = pm.Normal("log_boltz_factor02_norm", mu=0.0, sigma=1.0, dims="cloud")
-                log_boltz_factor02 = pm.Deterministic(
-                    "log_boltz_factor02", prior_log_boltz_factor * log_boltz_factor02_norm, dims="cloud"
-                )
+                tau_1665_norm = pm.Normal("tau_1665_norm", mu=0.0, sigma=1.0, dims="cloud")
+                tau_1665 = pm.Deterministic("tau_1665", prior_tau[0] + tau_1665_norm * prior_tau[1], dims="cloud")
 
-                # 1 -> 3 Boltzmann factor (shape: clouds)
-                log_boltz_factor13_norm = pm.Normal("log_boltz_factor13_norm", mu=0.0, sigma=1.0, dims="cloud")
-                log_boltz_factor13 = pm.Deterministic(
-                    "log_boltz_factor13", prior_log_boltz_factor * log_boltz_factor13_norm, dims="cloud"
-                )
+                tau_1667_norm = pm.Normal("tau_1667_norm", mu=0.0, sigma=1.0, dims="cloud")
+                tau_1667 = pm.Deterministic("tau_1667", prior_tau[0] + tau_1667_norm * prior_tau[1], dims="cloud")
 
-            # State column density (cm-2; shape: state, cloud)
-            log10_N2 = log10_N0 - log_boltz_factor02 * np.log10(np.e) - pt.log10(_G[0] / _G[2])
-            log10_N1 = log10_N2 + log_boltz_factor12 * np.log10(np.e) + pt.log10(_G[1] / _G[2])
-            log10_N3 = log10_N1 - log_boltz_factor13 * np.log10(np.e) - pt.log10(_G[1] / _G[3])
-            _ = pm.Deterministic(
-                "log10_N",
-                pt.stack([log10_N0, log10_N1, log10_N2, log10_N3]),
-                dims=["state", "cloud"],
-            )
-
-            # save Boltzman factors (shape: transitions, clouds)
-            # 1612 MHz 2 -> 1
-            log_boltz_factor_1612 = -log_boltz_factor12
-            # 1665 MHz 2 -> 0
-            log_boltz_factor_1665 = -log_boltz_factor02
-            # 1667 MHz 3 -> 1
-            log_boltz_factor_1667 = -log_boltz_factor13
-            # 1720 MHz 3 -> 0
-            log_N3 = log10_N3 / np.log10(np.e)
-            log_N0 = log10_N0 / np.log10(np.e)
-            log_boltz_factor_1720 = log_N3 - log_N0 + pt.log(_G[0] / _G[3])
-            log_boltz_factor = pm.Deterministic(
-                "log_boltz_factor",
-                pt.stack([log_boltz_factor_1612, log_boltz_factor_1665, log_boltz_factor_1667, log_boltz_factor_1720]),
-                dims=["transition", "cloud"],
-            )
+            # optical depth sum rule
+            _ = pm.Deterministic("tau_1720", tau_1665 / 5.0 + tau_1667 / 9.0 - tau_1612, dims="cloud")
 
             # depth (pc; shape: clouds)
             log10_depth_norm = pm.Normal("log10_depth_norm", mu=0.0, sigma=1.0, dims="cloud")
@@ -273,17 +209,6 @@ class AbsorptionModel(BaseModel):
             # FWHM (km/s; shape: clouds)
             _ = pm.Deterministic("fwhm", pt.sqrt(fwhm_thermal**2.0 + fwhm_nonthermal**2.0), dims="cloud")
 
-            # Excitation temperatures (K; shape: clouds)
-            _ = pm.Deterministic(
-                "Tex",
-                pt.stack([physics.calc_Tex(freq, log_boltz_factor[i]) for i, freq in enumerate(self.mol_data["freq"])]),
-                dims=["transition", "cloud"],
-            )
-
-            # Optical depth rms
-            rms_absorption_norm = pm.HalfNormal("rms_absorption_norm", sigma=1.0, dims="transition")
-            _ = pm.Deterministic("rms_absorption", rms_absorption_norm * prior_rms_absorption, dims="transition")
-
     def predict_absorption(self) -> dict:
         """Predict the absorption spectra from the model parameters.
 
@@ -293,7 +218,7 @@ class AbsorptionModel(BaseModel):
             Optical depth spectra for 1612, 1665, 1667, and 1720 MHz transitions
         """
         absorption = {}
-        for i, label in enumerate(self.model.coords["transition"]):
+        for label in self.model.coords["transition"]:
             # Line profile (km-1 s; shape: spectral, cloud)
             line_profile = physics.calc_line_profile(
                 self.data[f"absorption_{label}"].spectral,
@@ -302,15 +227,7 @@ class AbsorptionModel(BaseModel):
             )
 
             # Optical depth spectrum (shape: spectral, cloud)
-            tau_spectrum = physics.calc_optical_depth(
-                _G[_OH[label][0]],
-                _G[_OH[label][1]],
-                10.0 ** self.model["log10_N"][_OH[label][1]],
-                pt.exp(self.model["log_boltz_factor"][i]),
-                line_profile,
-                self.mol_data["freq"][i],
-                self.mol_data["Aul"][i],
-            )
+            tau_spectrum = self.model[f"tau_{label}"] * line_profile
 
             # Sum over clouds
             absorption[label] = 1.0 - pt.exp(-tau_spectrum.sum(axis=1))
@@ -325,10 +242,10 @@ class AbsorptionModel(BaseModel):
         baseline_models = self.predict_baseline()
 
         with self.model:
-            for i, label in enumerate(self.model.coords["transition"]):
+            for label in self.model.coords["transition"]:
                 _ = pm.Normal(
                     f"absorption_{label}",
                     mu=absorption[label] + baseline_models[f"absorption_{label}"],
-                    sigma=self.model["rms_absorption"][i],
+                    sigma=self.data[f"absorption_{label}"].noise,
                     observed=self.data[f"absorption_{label}"].brightness,
                 )

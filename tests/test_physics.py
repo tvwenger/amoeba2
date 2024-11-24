@@ -37,7 +37,7 @@ def test_calc_nonthermal_fwhm():
 
 
 def test_calc_Tex():
-    Tex = physics.calc_Tex(2, 1, 1800.0, 1e12, 1e11).eval()
+    Tex = physics.calc_Tex(1800.0, 0.1)
     assert not np.isnan(Tex)
 
 
@@ -65,11 +65,11 @@ def test_calc_optical_depth():
 
     gu = 3
     gl = 5
-    Nu = np.array([1.0e12, 1.0e12])
     Nl = np.array([1.0e11, 1.0e13])
+    boltz_factor = np.exp(-np.array([-0.1, 0.1]))
     freq = 1800.0
     Aul = 1.0e-13
-    optical_depth = physics.calc_optical_depth(gu, gl, Nu, Nl, line_profile, freq, Aul)
+    optical_depth = physics.calc_optical_depth(gu, gl, Nl, boltz_factor, line_profile, freq, Aul)
     assert optical_depth.shape == (1001, 2)
     assert np.all(optical_depth[:, 0] < 0)
     assert np.all(optical_depth[:, 1] > 0)
