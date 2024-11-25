@@ -24,6 +24,7 @@ import numpy as np
 
 from bayes_spec import SpecData
 from amoeba2 import EmissionAbsorptionModel
+from amoeba2.utils import get_molecule_data
 
 
 def test_emission_absorption_model():
@@ -40,6 +41,9 @@ def test_emission_absorption_model():
         "emission_1720": SpecData(velocity, brightness, 1.0),
     }
     model = EmissionAbsorptionModel(data, 2, baseline_degree=1)
+    assert isinstance(model.mol_data, dict)
+    mol_data = get_molecule_data()
+    model = EmissionAbsorptionModel(data, 2, baseline_degree=1, mol_data=mol_data)
     assert isinstance(model.mol_data, dict)
     model.add_priors()
     model.add_likelihood()
