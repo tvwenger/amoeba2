@@ -16,8 +16,10 @@ Read below to get started, and check out the tutorials here: https://amoeba2.rea
   - [Development Installation](#development-installation)
 - [Notes on Physics \& Radiative Transfer](#notes-on-physics--radiative-transfer)
 - [Models](#models)
-  - [`TauModel`](#taumodel)
-  - [`TauTBModel`](#tautbmodel)
+  - [`AbsorptionModel`](#absorptionmodel)
+    - [`mainline_pos_tau`](#mainline_pos_tau)
+  - [`EmissionAbsorptionModel`](#emissionabsorptionmodel)
+    - [`mainline_pos_tau`](#mainline_pos_tau-1)
   - [`ordered`](#ordered)
 - [Syntax \& Examples](#syntax--examples)
 - [Issues and Contributing](#issues-and-contributing)
@@ -30,7 +32,7 @@ Read below to get started, and check out the tutorials here: https://amoeba2.rea
 
 Install with `pip` in a `conda` virtual environment:
 ```
-conda create --name amoeba2 -c conda-forge pymc pip
+conda create --name amoeba2 -c conda-forge pymc pytensor pip
 conda activate amoeba2
 pip install amoeba2
 ```
@@ -61,37 +63,67 @@ Notably, since these are *forward models*, we do not make assumptions regarding 
 
 The models provided by `amoeba2` are implemented in the [`bayes_spec`](https://github.com/tvwenger/bayes_spec) framework. `bayes_spec` assumes that the source of spectral line emission can be decomposed into a series of "clouds", each of which is defined by a set of model parameters. Here we define the models available in `amoeba2`.
 
-## `TauModel`
+## `AbsorptionModel`
 
-`TauModel` is a model that predicts the OH hyperfine optical depth spectra, typically measured via absorption observations. The `SpecData` keys for this model must be "tau_1612", "tau_1665", "tau_1667", and "tau_1720". The following diagram demonstrates the relationship between the free parameters (empty ellipses), deterministic quantities (rectangles), model predictions (filled ellipses), and observations (filled, round rectangles). Many of the parameters are internally normalized (and thus have names like `_norm`). The subsequent tables describe the model parameters in more detail.
+`AbsorptionModel` is a model that predicts the OH hyperfine absorption (`1-exp(-tau)`) spectra. The `SpecData` keys for this model must be "absorption_1612", "absorption_1665", "absorption_1667", and "absorption_1720". The following diagram demonstrates the relationship between the free parameters (empty ellipses), deterministic quantities (rectangles), model predictions (filled ellipses), and observations (filled, round rectangles). Many of the parameters are internally normalized (and thus have names like `_norm`). The subsequent tables describe the model parameters in more detail.
 
-![tau model graph](docs/source/notebooks/tau_model.png)
+![absorption model graph](docs/source/notebooks/absorption_model.png)
 
-| Cloud Parameter<br>`variable` | Parameter                                | Units    | Prior, where<br>($p_0, p_1, \dots$) = `prior_{variable}`     | Default<br>`prior_{variable}` |
-| :---------------------------- | :--------------------------------------- | :------- | :----------------------------------------------------------- | :---------------------------- |
-| `log10_N_0`                   | log10 lowest energy state column density | `cm-2`   | $\log_{10}N_0 \sim {\rm Normal}(\mu=p_0, \sigma=p_1)$        | `[13.0, 1.0]`                 |
-| `inv_Tex`                     | Inverse excitation temperature           | `K-1`    | $T_{\rm ex}^{-1} \sim {\rm Normal}(\mu=p_0, \sigma=p_1)$     | `[0.1, 1.0]`                  |
-| `fwhm`                        | FWHM line width                          | `km s-1` | $\Delta V_{\rm H} \sim {\rm Gamma}(\alpha=2.0, \beta=1.0/p)$ | `1.0`                         |  |
-| `velocity`                    | Velocity                                 | `km s-1` | $V \sim {\rm Normal}(\mu=p_0, \sigma=p_1)$                   | `[0.0, 10.0]`                 |
+| Cloud Parameter<br>`variable` | Parameter                 | Units    | Prior, where<br>($p_0, p_1, \dots$) = `prior_{variable}` | Default<br>`prior_{variable}` |
+| :---------------------------- | :------------------------ | :------- | :------------------------------------------------------- | :---------------------------- |
+| `tau`                         | Line-center optical depth | ``       | $\tau \sim {\rm Normal}(\mu=p_0, \sigma=p_1)$            | `[0.1, 0.1]`                  |
+| `log10_depth`                 | log10 line-of-sight depth | `pc`     | $\log_{10} d \sim {\rm Normal}(\mu=p_0, \sigma=p_1)$     | `[0.0, 0.25]`                 |
+| `log10_Tkin`                  | log10 kinetic temperature | `K`      | $\log_{10} T_K \sim {\rm Normal}(\mu=p_0, \sigma=p_1)$   | `[2.0, 1.0]`                  |
+| `velocity`                    | Velocity                  | `km s-1` | $V \sim {\rm Normal}(\mu=p_0, \sigma=p_1)$               | `[0.0, 10.0]`                 |
 
-| Hyper Parameter<br>`variable` | Parameter               | Units | Prior, where<br>($p_0, p_1, \dots$) = `prior_{variable}` | Default<br>`prior_{variable}` |
-| :---------------------------- | :---------------------- | :---- | :------------------------------------------------------- | :---------------------------- |
-| `rms_tau`                     | Optical depth rms noise | ``    | ${\rm rms}_\tau \sim {\rm HalfNormal}(\sigma=p)$         | `0.1`                         |
+| Hyper Parameter<br>`variable` | Parameter                                        | Units    | Prior, where<br>($p_0, p_1, \dots$) = `prior_{variable}`              | Default<br>`prior_{variable}` |
+| :---------------------------- | :----------------------------------------------- | :------- | :-------------------------------------------------------------------- | :---------------------------- |
+| `log10_nth_fwhm_1pc`          | Non-thermal broadening at 1 pc                   | `km s-1` | $\log_{10}\Delta V_{\rm 1 pc} \sim {\rm Normal}(\mu=p_0, \sigma=p_1)$ | `[0.2, 0.1]`                  |
+| `log10_depth_nth_fwhm_power`  | Non-thermal broadening vs. depth power law index | ``       | $\alpha \sim {\rm Normal}(\mu=p_0, \sigma=p_1)$                       | `[0.4, 0.1]`                  |
+| `baseline_coeffs`             | Normalized polynomial baseline coefficients      | ``       | $\beta_i \sim {\rm Normal}(mu=0, \sigma=p_i)$                         | `[1.0]*(baseline_degree + 1)` |
 
-## `TauTBModel`
+### `mainline_pos_tau`
 
-`TauTBModel` is otherwise identical to `TBModel`, except it also predicts the brightness temperature spectra assuming a given background source brightness temperature (where `bg_temp` is in `K` and is supplied during model initialization `TBTauModel(bg_temp=2.7)`). The `SpecData` keys for this model must be "tau_1612", "tau_1665", "tau_1667", "tau_1720", "TB_1612", "TB_1665", "TB_1667", and "TB_1720". The following diagram demonstrates the model, and the subsequent table describe the additional model parameters.
+An additional parameter to `AbsorptionModel` is `mainline_pos_tau`. If `True`, then the mainline (1665 MHz and 1667 MHz) optical depths are required to be positive by changing the prior distribution as follows.
 
-![tau model graph](docs/source/notebooks/tb_tau_model.png)
+| Cloud Parameter<br>`variable` | Parameter                 | Units | Prior, where<br>($p_0, p_1, \dots$) = `prior_{variable}` | Default<br>`prior_{variable}` |
+| :---------------------------- | :------------------------ | :---- | :------------------------------------------------------- | :---------------------------- |
+| `tau`                         | Line-center optical depth | ``    | $\tau \sim {\rm HalfNormal}(\sigma=p_1)$                 | `[0.1, 0.1]`                  |
 
-| Hyper Parameter<br>`variable` | Parameter                                 | Units | Prior, where<br>($p_0, p_1, \dots$) = `prior_{variable}` | Default<br>`prior_{variable}` |
-| :---------------------------- | :---------------------------------------- | :---- | :------------------------------------------------------- | :---------------------------- |
-| `rms_TB`                      | Brightness temperature spectral rms noise | ``    | ${\rm rms}_{T} \sim {\rm HalfNormal}(\sigma=p)$          | `1.0`                         |
+
+## `EmissionAbsorptionModel`
+
+`EmissionAbsorptionModel` is a more physically motivated model that also predicts the brightness temperature spectra assuming a given background source brightness temperature (where `bg_temp` is in `K` and is supplied during model initialization; `EmissionAbsorptionModel(bg_temp=3.77)` is the default). The `SpecData` keys for this model must be "absorption_1612", "absorption_1665", "absorption_1667", "absorption_1720", "emission_1612", "emission_1665", "emission_1667", and "emission_1720". The following diagram demonstrates the model, and the subsequent table describe the additional model parameters.
+
+![emission absorption model graph](docs/source/notebooks/emission_absorption_model.png)
+
+
+| Cloud Parameter<br>`variable` | Parameter                                   | Units    | Prior, where<br>($p_0, p_1, \dots$) = `prior_{variable}` | Default<br>`prior_{variable}` |
+| :---------------------------- | :------------------------------------------ | :------- | :------------------------------------------------------- | :---------------------------- |
+| `log10_N0`                    | log10 column density in lowest energy state | `cm-2`   | $\log_{10} N_0 \sim {\rm Normal}(\mu=p_0, \sigma=p_1)$   | `[13.0, 1.0]`                 |
+| `log_boltz_factor`            | log Boltzmann factor (`-h*freq/(k*Tex)`)    | ``       | $\ln B \sim {\rm Normal}(\mu=p_0, \sigma=p_1)            | `[-0.1, 0.1]`                 |
+| `log10_depth`                 | log10 line-of-sight depth                   | `pc`     | $\log_{10} d \sim {\rm Normal}(\mu=p_0, \sigma=p_1)$     | `[0.0, 0.25]`                 |
+| `log10_Tkin`                  | log10 kinetic temperature                   | `K`      | $\log_{10} T_K \sim {\rm Normal}(\mu=p_0, \sigma=p_1)$   | `[2.0, 1.0]`                  |
+| `velocity`                    | Velocity                                    | `km s-1` | $V \sim {\rm Normal}(\mu=p_0, \sigma=p_1)$               | `[0.0, 10.0]`                 |
+
+| Hyper Parameter<br>`variable` | Parameter                                        | Units    | Prior, where<br>($p_0, p_1, \dots$) = `prior_{variable}`              | Default<br>`prior_{variable}` |
+| :---------------------------- | :----------------------------------------------- | :------- | :-------------------------------------------------------------------- | :---------------------------- |
+| `log10_nth_fwhm_1pc`          | Non-thermal broadening at 1 pc                   | `km s-1` | $\log_{10}\Delta V_{\rm 1 pc} \sim {\rm Normal}(\mu=p_0, \sigma=p_1)$ | `[0.2, 0.1]`                  |
+| `log10_depth_nth_fwhm_power`  | Non-thermal broadening vs. depth power law index | ``       | $\alpha \sim {\rm Normal}(\mu=p_0, \sigma=p_1)$                       | `[0.4, 0.1]`                  |
+| `baseline_coeffs`             | Normalized polynomial baseline coefficients      | ``       | $\beta_i \sim {\rm Normal}(mu=0, \sigma=p_i)$                         | `[1.0]*(baseline_degree + 1)` |
+
+### `mainline_pos_tau`
+
+An additional parameter to `EmissionAbsorptionModel` is `mainline_pos_tau`. If `True`, then the mainline (1665 MHz and 1667 MHz) optical depths are required to be positive by changing the prior distribution as follows.
+
+| Cloud Parameter<br>`variable` | Parameter                               | Units | Prior, where<br>($p_0, p_1, \dots$) = `prior_{variable}` | Default<br>`prior_{variable}` |
+| :---------------------------- | :-------------------------------------- | :---- | :------------------------------------------------------- | :---------------------------- |
+| `log_boltz_factor`            | log Boltzmann factor (`h*freq/(k*Tex)`) | ``    | $\ln B \sim {\rm HalfNormal}(\sigma=p_1)                 | `[0.1, 0.1]`                  |
 
 
 ## `ordered`
 
-An additional parameter to `set_priors` for these models is `ordered`. By default, this parameter is `False`, in which case the order of the clouds is from *nearest* to *farthest*. Sampling from these models can be challenging due to the labeling degeneracy: if the order of clouds does not matter (i.e., the emission is optically thin), then each Markov chain could decide on a different, equally-valid order of clouds.
+An additional parameter to `set_priors` for both the `AbsorptionModel` and `EmissionAbsorptionModel` is `ordered`. By default, this parameter is `False`, in which case the order of the clouds is from *nearest* to *farthest*. Sampling from these models can be challenging due to the labeling degeneracy: if the order of clouds does not matter (i.e., the emission is optically thin), then each Markov chain could decide on a different, equally-valid order of clouds.
 
 If we assume that the emission is optically thin, then we can set `ordered=True`, in which case the order of clouds is restricted to be increasing with velocity. This assumption can *drastically* improve sampling efficiency. When `ordered=True`, the `velocity` prior is defined differently:
 
@@ -109,19 +141,4 @@ Anyone is welcome to submit issues or contribute to the development of this soft
 
 # License and Copyright
 
-Copyright (c) 2024 Trey Wenger
-
-GNU General Public License v3 (GNU GPLv3)
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published
-by the Free Software Foundation, either version 3 of the License,
-or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>.
+Copyright(C) 2024 by Trey V. Wenger; tvwenger@gmail.com. This code is licensed under MIT license (see LICENSE for details)

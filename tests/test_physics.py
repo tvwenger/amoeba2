@@ -26,12 +26,22 @@ from numpy.testing import assert_allclose
 from amoeba2 import physics
 
 
-def test_boltzmann():
-    boltzmann = physics.calc_boltzmann(2, 1, 1800.0, 1.0).eval()
-    assert not np.isnan(boltzmann)
+def test_calc_thermal_fwhm():
+    fwhm = physics.calc_thermal_fwhm(100.0).eval()
+    assert not np.isnan(fwhm)
 
 
-def test_calc_line_ratio():
+def test_calc_nonthermal_fwhm():
+    fwhm = physics.calc_nonthermal_fwhm(1.0, 10.0, 0.5)
+    assert not np.isnan(fwhm)
+
+
+def test_calc_Tex():
+    Tex = physics.calc_Tex(1800.0, 0.1)
+    assert not np.isnan(Tex)
+
+
+def test_calc_line_profile():
     velo_axis = np.linspace(-10.0, 10.0, 1001)
     velocity = np.array([0.0, 1.0])
     fwhm = np.array([1.0, 2.0])
@@ -49,33 +59,43 @@ def test_calc_line_ratio():
 
 def test_calc_optical_depth():
     velo_axis = np.linspace(-10.0, 10.0, 1001)
-    velocity = np.array([0.0, 1.0])
-    fwhm = np.array([1.0, 2.0])
-    N_u = np.array([1.0e12, 1.0e13])
-    inv_Tex = 1.0 / np.array([3.0, -2.0])
+    velocity = np.array([0.0, 2.0])
+    fwhm = np.array([1.0, 3.0])
     line_profile = physics.calc_line_profile(velo_axis, velocity, fwhm).eval()
+
+    gu = 3
+    gl = 5
+    Nl = np.array([1.0e11, 1.0e13])
+    boltz_factor = np.exp(-np.array([-0.1, 0.1]))
     freq = 1800.0
     Aul = 1.0e-13
-    optical_depth = physics.calc_optical_depth(N_u, inv_Tex, line_profile, freq, Aul).eval()
+    optical_depth = physics.calc_optical_depth(gu, gl, Nl, boltz_factor, line_profile, freq, Aul)
     assert optical_depth.shape == (1001, 2)
-    assert np.all(optical_depth[:, 0] > 0)
-    assert np.all(optical_depth[:, 1] < 0)
+    assert np.all(optical_depth[:, 0] < 0)
+    assert np.all(optical_depth[:, 1] > 0)
 
 
 def test_rj_temperature():
-    assert physics.rj_temperature(1800.0, -10.0).eval() < physics.rj_temperature(1800.0, 10.0).eval()
+    Tex = np.array([-10.0, 10.0])
+    rj_temp = physics.rj_temperature(1800.0, Tex).eval()
+    assert rj_temp[0] < rj_temp[1]
 
 
 def test_radiative_transfer():
     velo_axis = np.linspace(-10.0, 10.0, 1001)
-    velocity = np.array([0.0, 1.0])
-    fwhm = np.array([1.0, 2.0])
-    N_u = np.array([1.0e12, 1.0e13])
-    inv_Tex = 1.0 / np.array([3.0, -2.0])
+    velocity = np.array([0.0, 2.0])
+    fwhm = np.array([1.0, 3.0])
     line_profile = physics.calc_line_profile(velo_axis, velocity, fwhm).eval()
+
+    gu = 3
+    gl = 5
+    Nu = np.array([1.0e12, 1.0e12])
+    Nl = np.array([1.0e11, 1.0e13])
     freq = 1800.0
     Aul = 1.0e-13
-    optical_depth = physics.calc_optical_depth(N_u, inv_Tex, line_profile, freq, Aul).eval()
+    optical_depth = physics.calc_optical_depth(gu, gl, Nu, Nl, line_profile, freq, Aul)
+
+    Tex = np.array([-10.0, 10.0])
     bg_temp = 2.7
-    tb = physics.radiative_transfer(freq, optical_depth, inv_Tex, bg_temp).eval()
+    tb = physics.radiative_transfer(freq, optical_depth, Tex, bg_temp).eval()
     assert tb.shape == (1001,)

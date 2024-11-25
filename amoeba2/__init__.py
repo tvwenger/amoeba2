@@ -1,10 +1,10 @@
 __all__ = [
-    "TauModel",
-    "TBTauModel",
+    "AbsorptionModel",
+    "EmissionAbsorptionModel",
 ]
 
-from amoeba2.tau_model import TauModel
-from amoeba2.tb_tau_model import TBTauModel
+from amoeba2.absorption_model import AbsorptionModel
+from amoeba2.emission_absorption_model import EmissionAbsorptionModel
 
 from . import _version
 

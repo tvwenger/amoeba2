@@ -4,21 +4,7 @@ Various utilities.
 
 Copyright(C) 2024 by
 Trey V. Wenger; tvwenger@gmail.com
-
-GNU General Public License v3 (GNU GPLv3)
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published
-by the Free Software Foundation, either version 3 of the License,
-or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>.
+This code is licensed under MIT license (see LICENSE for details)
 """
 
 from typing import Optional
@@ -28,6 +14,17 @@ from numpy.polynomial import Polynomial
 
 import astropy.units as u
 from astroquery.jplspec import JPLSpec
+
+# OH state degeneracies
+_G = [3, 5, 3, 5]
+
+# OH states (upper, lower) associated with transitions
+_OH = {
+    "1612": [2, 1],
+    "1665": [2, 0],
+    "1667": [3, 1],
+    "1720": [3, 0],
+}
 
 
 def get_molecule_data(
@@ -88,9 +85,7 @@ def get_molecule_data(
 
     # limit states
     if rot_state_lower is not None:
-        output_rot_state = np.array(
-            [int(output['QN"'][i][3:5]) for i in range(len(output))]
-        )
+        output_rot_state = np.array([int(output['QN"'][i][3:5]) for i in range(len(output))])
         good = output_rot_state == rot_state_lower
         output = output[good]
 
@@ -116,11 +111,7 @@ def get_molecule_data(
     logint = np.array(output["LGINT"])  # this should just be a number
     # from CDMS website
     sijmu = (
-        (
-            np.exp(np.float64(-(elower_icm / 0.695) / CT))
-            - np.exp(np.float64(-(eupper_icm / 0.695) / CT))
-        )
-        ** (-1)
+        (np.exp(np.float64(-(elower_icm / 0.695) / CT)) - np.exp(np.float64(-(eupper_icm / 0.695) / CT))) ** (-1)
         * ((10**logint) / freq_MHz)
         * (24025.120666)
         * 10.0 ** log10_Q_terms[0]
