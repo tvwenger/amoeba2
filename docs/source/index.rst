@@ -10,7 +10,7 @@ Installation
 ============
 .. code-block::
 
-    conda create --name amoeba2 -c conda-forge pymc pip
+    conda create --name amoeba2 -c conda-forge pymc pytensor pip
     conda activate amoeba2
     pip install amoeba2
 
@@ -18,8 +18,8 @@ Installation
    :maxdepth: 2
    :caption: Tutorials:
 
-   notebooks/tau_model
-   notebooks/tb_tau_model
+   notebooks/absorption_model
+   notebooks/emission_absorption_model
    notebooks/optimization
    notebooks/real_data
 
