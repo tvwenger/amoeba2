@@ -21,7 +21,7 @@ _C = c.c.to("km s-1").value
 _C_CM_MHZ = c.c.to("cm MHz").value
 
 
-def calc_thermal_fwhm(kinetic_temp: float) -> float:
+def calc_thermal_fwhm(kinetic_temp: float, weight: float = 17.0) -> float:
     """Calculate the thermal line broadening assuming a Maxwellian velocity distribution
     (Condon & Ransom eq. 7.35)
 
@@ -29,15 +29,17 @@ def calc_thermal_fwhm(kinetic_temp: float) -> float:
     ----------
     kinetic_temp : float
         Kinetic temperature (K)
+    weight : float
+        Molecular weight (number of protons). By default, 17 (OH molecule)
 
     Returns
     -------
     float
         Thermal FWHM line width (km s-1)
     """
-    # constant for OH: molecular weight = 17 m_p
-    const = 0.04195791  # km/s K-1/2
-    return const * pt.sqrt(kinetic_temp)
+    # constant = sqrt(8*ln(2)*k_B/m_p)
+    const = 0.21394418  # km/s K-1/2
+    return const * pt.sqrt(kinetic_temp / weight)
 
 
 def calc_nonthermal_fwhm(depth: float, nth_fwhm_1pc: float, depth_nth_fwhm_power: float) -> float:
